@@ -9,6 +9,6 @@ python -m delphi EleutherAI/pythia-160m EleutherAI/sae-pythia-160m-32k \
   --hookpoints layers.3.mlp \
   --scorers detection \
   --name pythia-160m-test \
-  --enable_expert_parallel \
-  --explainer_model_max_len 2048 \
+  --explainer_model_max_len 3192 \
+  --max_num_seqs 64 \
   --num_gpus 2

@@ -195,7 +195,13 @@ class RunConfig(Serializable):
         default=False,
     )
     """Whether to enable VLLM expert parallelism for the MOE explainer model."""
-
+    
+    # Default is None
+    max_num_seqs: int = field(
+        default=None,
+    )
+    """Maximum number of sequences for VLLM to process in an iteration. If None, use VLLMs default value."""
+    
     seed: int = field(
         default=22,
     )

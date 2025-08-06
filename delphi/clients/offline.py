@@ -49,8 +49,9 @@ class Offline(Client):
         number_tokens_to_generate: int = 500,
         num_gpus: int = 2,
         enforce_eager: bool = False,
+        max_num_seqs: int = None,
         statistics: bool = False,
-        expert_parallel = False,
+        expert_parallel: bool = False,
     ):
         """Client for offline generation. Models not already present in the on-disk
         HuggingFace cache will be downloaded. Note that temperature must be increased
@@ -64,6 +65,7 @@ class Offline(Client):
             model=model,
             gpu_memory_utilization=max_memory,
             enable_prefix_caching=prefix_caching,
+            max_num_seqs=max_num_seqs,
             tensor_parallel_size=num_gpus,
             max_model_len=max_model_len,
             enforce_eager=enforce_eager,
