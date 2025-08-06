@@ -190,6 +190,11 @@ class RunConfig(Serializable):
         default=torch.cuda.device_count(),
     )
     """Number of GPUs to use for explanation and scoring."""
+    
+    enable_expert_parallel: bool = field(
+        default=False,
+    )
+    """Whether to enable VLLM expert parallelism for the MOE explainer model."""
 
     seed: int = field(
         default=22,

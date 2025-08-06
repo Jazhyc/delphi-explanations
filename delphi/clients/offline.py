@@ -50,6 +50,7 @@ class Offline(Client):
         num_gpus: int = 2,
         enforce_eager: bool = False,
         statistics: bool = False,
+        expert_parallel = False,
     ):
         """Client for offline generation. Models not already present in the on-disk
         HuggingFace cache will be downloaded. Note that temperature must be increased
@@ -66,6 +67,7 @@ class Offline(Client):
             tensor_parallel_size=num_gpus,
             max_model_len=max_model_len,
             enforce_eager=enforce_eager,
+            enable_expert_parallel=expert_parallel,
         )
         self.sampling_params = SamplingParams(max_tokens=number_tokens_to_generate)
         self.tokenizer = AutoTokenizer.from_pretrained(model)
