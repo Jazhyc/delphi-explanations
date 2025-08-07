@@ -37,4 +37,5 @@ python -m delphi \
     --n_examples_test 100 \
     --train_type "random" \
     --test_type "quantiles" \
-    --hf_token "$HF_TOKEN"
+    --hf_token "$HF_TOKEN" \
+    --filter_bos
