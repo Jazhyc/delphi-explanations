@@ -415,6 +415,10 @@ async def run(
         )
 
     del model, hookpoint_to_sparse_encode
+    
+    # Unload model
+    torch.cuda.empty_cache()
+    
     if run_cfg.constructor_cfg.non_activating_source == "neighbours":
         nrh = assert_type(
             list,
