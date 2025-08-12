@@ -1,4 +1,5 @@
 from math import ceil
+from pathlib import Path
 from typing import Literal
 
 import torch
@@ -23,6 +24,7 @@ class FuzzingScorer(Classifier, Scorer):
         threshold: float = 0.3,
         log_prob: bool = False,
         temperature: float = 0.0,
+        stats_path: Path | None = None,
         fuzz_type: Literal["default", "active"] = "default",
         **generation_kwargs,
     ):
@@ -37,6 +39,9 @@ class FuzzingScorer(Classifier, Scorer):
                         a larger number can both leak information and make
                         it harder for models to generate anwers in the correct format.
             log_prob: Whether to use log probabilities to allow for AUC calculation.
+            temperature: Temperature for generation.
+            stats_path: Path to save statistics JSON file.
+            fuzz_type: Type of fuzzing to perform.
             generation_kwargs: Additional generation kwargs.
         """
         super().__init__(
@@ -44,6 +49,7 @@ class FuzzingScorer(Classifier, Scorer):
             verbose=verbose,
             n_examples_shown=n_examples_shown,
             log_prob=log_prob,
+            stats_path=stats_path,
             temperature=temperature,
             **generation_kwargs,
         )

@@ -36,7 +36,14 @@ class OpenRouter(Client):
     def postprocess(self, response):
         response_json = response.json()
         msg = response_json["choices"][0]["message"]["content"]
-        return Response(text=msg)
+        usage = response_json.get("usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        return Response(
+            text=msg,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+        )
 
     async def generate(  # type: ignore
         self,

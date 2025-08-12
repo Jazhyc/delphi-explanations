@@ -2,7 +2,9 @@ import json
 import os
 import random
 import re
+import time
 from abc import ABC, abstractmethod
+from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import NamedTuple
 
@@ -38,17 +40,40 @@ class Explainer(ABC):
     """The temperature for explanation generation."""
     generation_kwargs: dict = field(default_factory=dict)
     """Additional keyword arguments for the generation client."""
+    stats: dict = field(
+        default_factory=lambda: defaultdict(
+            lambda: {
+                "total_time": 0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "count": 0,
+            }
+        )
+    )
 
     async def __call__(self, record: LatentRecord) -> ExplainerResult:
         messages = self._build_prompt(record.train)
 
+        start_time = time.time()
         response = await self.client.generate(
             messages, temperature=self.temperature, **self.generation_kwargs
         )
-        assert isinstance(response, Response)
+        end_time = time.time()
+
+        explainer_name = self.__class__.__name__
+        self.stats[explainer_name]["total_time"] += end_time - start_time
+        self.stats[explainer_name]["count"] += 1
 
         try:
-            explanation = self.parse_explanation(response.text)
+            if isinstance(response, Response):
+                response_text = response.text
+                if response.prompt_tokens:
+                    self.stats[explainer_name]["prompt_tokens"] += response.prompt_tokens
+                if response.completion_tokens:
+                    self.stats[explainer_name]["completion_tokens"] += response.completion_tokens
+            else:
+                response_text = response
+            explanation = self.parse_explanation(response_text)
             if self.verbose:
                 logger.info(f"Explanation: {explanation}")
                 logger.info(f"Messages: {messages[-1]['content']}")

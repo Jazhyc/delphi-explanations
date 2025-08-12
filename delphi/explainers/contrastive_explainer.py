@@ -1,4 +1,5 @@
 import asyncio
+import time
 from dataclasses import dataclass
 
 import torch
@@ -28,6 +29,7 @@ class ContrastiveExplainer(Explainer):
         Returns:
             ExplainerResult: The explainer result containing the explanation.
         """
+        start_time = time.time()
         # Sample from both activating and non-activating examples
         activating_examples = record.train[: self.max_examples]
 
@@ -52,10 +54,19 @@ class ContrastiveExplainer(Explainer):
         response = await self.client.generate(
             messages, temperature=self.temperature, **self.generation_kwargs
         )
+        end_time = time.time()
+
+        explainer_name = self.__class__.__name__
+        self.stats[explainer_name]["total_time"] += end_time - start_time
+        self.stats[explainer_name]["count"] += 1
 
         try:
             if isinstance(response, Response):
                 response_text = response.text
+                if response.prompt_tokens:
+                    self.stats[explainer_name]["prompt_tokens"] += response.prompt_tokens
+                if response.completion_tokens:
+                    self.stats[explainer_name]["completion_tokens"] += response.completion_tokens
             else:
                 response_text = response
             explanation = self.parse_explanation(response_text)

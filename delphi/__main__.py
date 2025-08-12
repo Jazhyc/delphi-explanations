@@ -244,6 +244,8 @@ async def process_cache(
         scorer_path = scores_path / scorer_name
         scorer_path.mkdir(parents=True, exist_ok=True)
 
+        stats_path = scorer_path.parent.parent / f"{scorer_name}_stats.json"
+
         if scorer_name == "simulation":
             scorer = OpenAISimulator(llm_client, tokenizer=tokenizer, all_at_once=False)
         elif scorer_name == "fuzz":
@@ -252,6 +254,7 @@ async def process_cache(
                 n_examples_shown=run_cfg.num_examples_per_scorer_prompt,
                 verbose=run_cfg.verbose,
                 log_prob=run_cfg.log_probs,
+                stats_path=stats_path,
             )
         elif scorer_name == "detection":
             scorer = DetectionScorer(
@@ -259,6 +262,7 @@ async def process_cache(
                 n_examples_shown=run_cfg.num_examples_per_scorer_prompt,
                 verbose=run_cfg.verbose,
                 log_prob=run_cfg.log_probs,
+                stats_path=stats_path,
             )
         else:
             raise ValueError(f"Scorer {scorer_name} not supported")
@@ -284,6 +288,13 @@ async def process_cache(
         run_cfg.pipeline_num_proc = 1
 
     await pipeline.run(run_cfg.pipeline_num_proc)
+
+    if not run_cfg.explainer == "none":
+        stats_path = explanations_path.parent / "explainer_stats.json"
+        # explainer.stats is a defaultdict, must convert to dict for serialization.
+        stats_to_save = {key: dict(value) for key, value in explainer.stats.items()}
+        with open(stats_path, "wb") as f:
+            f.write(orjson.dumps(stats_to_save, option=orjson.OPT_INDENT_2))
 
 
 def populate_cache(

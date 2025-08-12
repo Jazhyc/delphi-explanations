@@ -2,10 +2,14 @@ import asyncio
 import json
 import random
 import re
+import time
 from abc import abstractmethod
+from collections import defaultdict
+from pathlib import Path
 from typing import Any, Literal
 
 import numpy as np
+import orjson
 
 from delphi import logger
 
@@ -22,6 +26,7 @@ class Classifier(Scorer):
         verbose: bool,
         n_examples_shown: int,
         log_prob: bool,
+        stats_path: Path,
         seed: int = 42,
         **generation_kwargs,
     ):
@@ -36,6 +41,7 @@ class Classifier(Scorer):
                         a larger number can both leak information and make
                         it harder for models to generate anwers in the correct format
             log_prob: Whether to use log probabilities to allow for AUC calculation
+            stats_path: Path to save statistics JSON file
             generation_kwargs: Additional generation kwargs
         """
         self.client = client
@@ -43,6 +49,15 @@ class Classifier(Scorer):
         self.n_examples_shown = n_examples_shown
         self.generation_kwargs = generation_kwargs
         self.log_prob = log_prob
+        self.stats_path = stats_path
+        self.stats = defaultdict(
+            lambda: {
+                "total_time": 0,
+                "prompt_tokens": 0,
+                "completion_tokens": 0,
+                "count": 0,
+            }
+        )
         self.rng = random.Random(seed)
 
     async def __call__(
@@ -57,6 +72,10 @@ class Classifier(Scorer):
             record.explanation,
             batched_samples,
         )
+
+        stats_to_save = {self.name: dict(self.stats[self.name])}  # type: ignore
+        with open(self.stats_path, "wb") as f:
+            f.write(orjson.dumps(stats_to_save, option=orjson.OPT_INDENT_2))
 
         return ScorerResult(record=record, score=results)
 
@@ -95,16 +114,27 @@ class Classifier(Scorer):
         if self.log_prob:
             self.generation_kwargs["logprobs"] = True
             self.generation_kwargs["top_logprobs"] = 5
+
+        start_time = time.time()
         try:
             response = await self.client.generate(prompt, **self.generation_kwargs)
         except Exception as e:
             logger.error(f"Error generating text: {repr(e)}")
             response = None
+        end_time = time.time()
+
+        self.stats[self.name]["total_time"] += end_time - start_time  # type: ignore
+        self.stats[self.name]["count"] += len(batch)  # type: ignore
+
         if response is None:
             predictions = [None] * self.n_examples_shown
             probabilities = [None] * self.n_examples_shown
         else:
             assert isinstance(response, Response)
+            if response.prompt_tokens:
+                self.stats[self.name]["prompt_tokens"] += response.prompt_tokens  # type: ignore
+            if response.completion_tokens:
+                self.stats[self.name]["completion_tokens"] += response.completion_tokens  # type: ignore
             selections = response.text
             logprobs = response.logprobs if self.log_prob else None
             try:

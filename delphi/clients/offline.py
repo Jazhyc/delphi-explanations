@@ -133,9 +133,11 @@ class Offline(Client):
 
         new_response = []
         for i, r in enumerate(response):
+            prompt_tokens = len(prompts[i])
+            completion_tokens = len(r.outputs[0].token_ids)
             logprobs, prompt_logprobs = self._parse_logprobs(r)
             if self.statistics:
-                statistics[i].num_generated_tokens = len(r.outputs[0].token_ids)
+                statistics[i].num_generated_tokens = completion_tokens
                 # save the statistics to a file, name is a hash of the prompt
                 statistics[i].prompt = batches[i][-1]["content"]  # type: ignore
                 statistics[i].response = r.outputs[0].text
@@ -148,6 +150,8 @@ class Offline(Client):
                     text=r.outputs[0].text,
                     logprobs=logprobs,
                     prompt_logprobs=prompt_logprobs,
+                    prompt_tokens=prompt_tokens,
+                    completion_tokens=completion_tokens,
                 )
             )
         return new_response

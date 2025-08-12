@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from ...clients.client import Client
 from ...latents import LatentRecord
 from ...scorers.scorer import Scorer
@@ -15,6 +17,7 @@ class DetectionScorer(Classifier, Scorer):
         verbose: bool = False,
         n_examples_shown: int = 1,
         log_prob: bool = False,
+        stats_path: Path | None = None,
         temperature: float = 0.0,
         **generation_kwargs,
     ):
@@ -29,6 +32,7 @@ class DetectionScorer(Classifier, Scorer):
                         a larger number can both leak information and make
                         it harder for models to generate anwers in the correct format
             log_prob: Whether to use log probabilities to allow for AUC calculation
+            stats_path: Path to save statistics JSON file
             generation_kwargs: Additional generation kwargs
         """
         super().__init__(
@@ -36,6 +40,7 @@ class DetectionScorer(Classifier, Scorer):
             verbose=verbose,
             n_examples_shown=n_examples_shown,
             log_prob=log_prob,
+            stats_path=stats_path,
             temperature=temperature,
             **generation_kwargs,
         )
