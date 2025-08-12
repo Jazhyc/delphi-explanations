@@ -59,6 +59,21 @@ def plot_accuracy_hist(df: pd.DataFrame, out_dir: Path):
         fig.write_image(out_dir / f"{label}_accuracy.pdf")
 
 
+def plot_per_feature_f1_scores(df: pd.DataFrame, out_dir: Path):
+    """Plots a histogram of F1 scores, one score per latent feature."""
+    out_dir.mkdir(exist_ok=True, parents=True)
+    # We only need one F1 score per feature, so we drop duplicates.
+    unique_features_df = df.drop_duplicates(subset=["module", "latent_idx", "score_type"])
+
+    for label in unique_features_df["score_type"].unique():
+        fig = px.histogram(
+            unique_features_df[unique_features_df["score_type"] == label],
+            x="f1_score",
+            title=f"Per-Feature F1 Score Distribution: {label}",
+        )
+        fig.write_image(out_dir / f"{label}_f1_distribution.pdf")
+
+
 def plot_roc_curve(df: pd.DataFrame, out_dir: Path):
     if not df.probability.nunique():
         return
@@ -329,8 +344,7 @@ def log_results(
 
     processed_df = get_agg_metrics(latent_df, counts)
 
-    plot_accuracy_hist(processed_df, viz_path)
-
+    plot_per_feature_f1_scores(latent_df, viz_path)
     for score_type in processed_df.score_type.unique():
         score_type_summary = processed_df[processed_df.score_type == score_type].iloc[0]
         print(f"\n--- {score_type.title()} Metrics ---")

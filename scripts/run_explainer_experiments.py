@@ -23,8 +23,8 @@ CACHE_DIR = "results/cache_google_gemma-2-9b-it"
 
 # Explainer models to test
 EXPLAINER_MODELS = [
-    "RedHatAI/gemma-3-4b-it-quantized.w4a16",
-    # "RedHatAI/Qwen3-4B-quantized.w4a16",
+    # "RedHatAI/gemma-3-4b-it-quantized.w4a16",
+    "RedHatAI/Qwen3-4B-quantized.w4a16",
     # "RedHatAI/SmolLM3-3B-quantized.w4a16"
 ]
 
@@ -71,7 +71,7 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
         "--explainer_model", explainer_model,
         "--scorers", "fuzz", "detection",
         "--num_gpus", "1",
-        "--max_latents", "10",
+        "--max_latents", "100",
         "--shared_cache_path", CACHE_DIR,
         "--dataset_repo", DATASET_REPO,
         "--dataset_name", DATASET_NAME,

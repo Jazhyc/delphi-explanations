@@ -227,6 +227,12 @@ class RunConfig(Serializable):
     scoring speed but can leak information to the fuzzing and detection scorer,
     as well as increasing the scorer LLM task difficulty."""
 
+    enable_thinking: bool = field(
+        default=False,
+    )
+    """Whether to enable thinking mode in the chat template for offline models.
+    This allows reasoning models to use internal thinking tokens."""
+
     overwrite: list[Literal["cache", "neighbours", "scores"]] = list_field(
         choices=["cache", "neighbours", "scores"],
         default=[],

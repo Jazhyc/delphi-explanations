@@ -154,6 +154,7 @@ async def process_cache(
             statistics=run_cfg.verbose,
             max_num_seqs=run_cfg.max_num_seqs,
             expert_parallel=run_cfg.enable_expert_parallel,
+            enable_thinking=run_cfg.enable_thinking,
         )
     elif run_cfg.explainer_provider == "openrouter":
         if (
