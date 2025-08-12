@@ -470,7 +470,7 @@ async def run(
 
     if run_cfg.verbose:
         log_results(
-            scores_path, visualize_path, latents_path, run_cfg.hookpoints, run_cfg.scorers
+            scores_path, visualize_path, latents_path, hookpoints, run_cfg.scorers
         )
 
 
