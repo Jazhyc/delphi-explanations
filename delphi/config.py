@@ -161,6 +161,13 @@ class RunConfig(Serializable):
     """Scorer methods to score latent explanations. Options are 'fuzz', 'detection', and
     'simulation'."""
 
+    use_shared_cache: bool = field(
+        default=False,
+    )
+    """If True, use a shared cache directory (results/cache/) instead of experiment-specific
+    cache (results/{name}/latents/). This allows multiple experiments to reuse the same
+    activation cache, saving disk space and computation time."""
+
     name: str = ""
     """The name of the run. Results are saved in a directory with this name."""
 
