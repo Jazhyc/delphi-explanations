@@ -100,8 +100,12 @@ class Pipeline:
         semaphore = asyncio.Semaphore(max_concurrent)
         tasks = set()
 
-        progress_bar = tqdm(desc="Processing items")
-        number_of_items = 0
+        try:
+            total = len(self.loader)
+        except TypeError:
+            total = None
+
+        progress_bar = tqdm(total=total, desc="Generating explanations")
 
         async def process_and_update(item, semaphore):
             result = await self.process_item(item, semaphore)
@@ -109,7 +113,6 @@ class Pipeline:
             return result
 
         async for item in self.generate_items():
-            number_of_items += 1
             task = asyncio.create_task(process_and_update(item, semaphore))
             tasks.add(task)
 

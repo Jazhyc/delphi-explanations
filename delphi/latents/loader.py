@@ -42,6 +42,17 @@ class TensorBuffer:
     _tokens: Optional[Int[Tensor, "batch seq"]] = None
     """Tensor of tokens."""
 
+    def __len__(self):
+        """
+        Return the number of latents in the buffer.
+        """
+        if self.latents is not None:
+            return len(self.latents)
+
+        split_data = load_file(self.path)
+        locations = split_data["locations"]
+        return len(np.unique(locations[:, 2]))
+
     def __iter__(self):
         """
         Iterate over the buffer, yielding BufferOutput objects.
@@ -307,8 +318,10 @@ class LatentDataset:
             self.all_data[module] = None
 
     def __len__(self):
-        """Return the number of buffers in the dataset."""
-        return len(self.buffers)
+        """Return the number of latents in the dataset."""
+        if not hasattr(self, "_len_cache"):
+            self._len_cache = sum(len(b) for b in self.buffers)
+        return self._len_cache
 
     def _load_all_data(self, raw_dir: os.PathLike, modules: list[str]):
         """For each module, load all locations and activations"""
