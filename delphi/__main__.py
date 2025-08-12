@@ -387,9 +387,12 @@ async def run(
 
     run_cfg.save_json(base_path / "run_config.json", indent=4)
 
-    if run_cfg.use_shared_cache:
-        # Use shared cache directory under results/
-        latents_path = Path.cwd() / "results" / "cache"
+    if run_cfg.shared_cache_path:
+        # Use custom shared cache directory
+        latents_path = Path(run_cfg.shared_cache_path)
+        if not latents_path.is_absolute():
+            # Make relative paths relative to current working directory
+            latents_path = Path.cwd() / latents_path
         print(f"Using shared activation cache: {latents_path}")
     else:
         # Use experiment-specific cache directory
