@@ -149,7 +149,7 @@ def compute_classification_metrics(conf: dict) -> dict:
     )
 
 
-def load_data(scores_path: Path, modules: list[str]):
+def load_data(scores_path: Path, latents_path: Path, modules: list[str]):
     """Load all on-disk data into a single DataFrame."""
 
     def parse_score_file(path: Path) -> pd.DataFrame:
@@ -180,7 +180,7 @@ def load_data(scores_path: Path, modules: list[str]):
             ]
         )
 
-    counts_file = scores_path.parent / "log" / "hookpoint_firing_counts.pt"
+    counts_file = latents_path.parent / "log" / "hookpoint_firing_counts.pt"
     counts = torch.load(counts_file, weights_only=True) if counts_file.exists() else {}
     if not all(module in counts for module in modules):
         print("Missing firing counts for some modules, setting counts to None.")
@@ -285,11 +285,15 @@ def add_latent_f1(latent_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def log_results(
-    scores_path: Path, viz_path: Path, modules: list[str], scorer_names: list[str]
+    scores_path: Path,
+    viz_path: Path,
+    latents_path: Path,
+    modules: list[str],
+    scorer_names: list[str],
 ):
     import_plotly()
 
-    latent_df, counts = load_data(scores_path, modules)
+    latent_df, counts = load_data(scores_path, latents_path, modules)
     latent_df = latent_df[latent_df["score_type"].isin(scorer_names)]
     latent_df = add_latent_f1(latent_df)
 

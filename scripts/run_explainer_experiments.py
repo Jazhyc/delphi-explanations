@@ -18,14 +18,14 @@ HOOKPOINT = "layer_32/width_131k/average_l0_51"
 DATASET_REPO = "EleutherAI/rpj-v2-sample"
 DATASET_NAME = "default"
 DATASET_COLUMN = "raw_content"
-CACHE_DIR = "results/cache_google_gemma-2-9b-it/latents"
+CACHE_DIR = "results/cache_google_gemma-2-9b-it"
 # Cache is organized per layer (e.g., layers.32/) for cleaner structure
 
 # Explainer models to test
 EXPLAINER_MODELS = [
     "RedHatAI/gemma-3-4b-it-quantized.w4a16",
-    "RedHatAI/Qwen3-4B-quantized.w4a16",
-    "RedHatAI/SmolLM3-3B-quantized.w4a16"
+    # "RedHatAI/Qwen3-4B-quantized.w4a16",
+    # "RedHatAI/SmolLM3-3B-quantized.w4a16"
 ]
 
 def get_model_name(model_path: str) -> str:
@@ -41,7 +41,7 @@ def setup_shared_cache() -> None:
     if cache_path.exists():
         print(f"Shared cache already exists at {cache_path}")
         # Check the layer structure
-        layer_dirs = list(cache_path.glob("layers.*"))
+        layer_dirs = list(cache_path.glob("latents/layers.*"))
         if layer_dirs:
             print(f"Cache contains {len(layer_dirs)} layer directories: {[d.name for d in layer_dirs]}")
         else:

@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import gc
 from functools import partial
 from pathlib import Path
 from typing import Callable
@@ -389,11 +390,14 @@ async def run(
 
     if run_cfg.shared_cache_path:
         # Use custom shared cache directory
-        latents_path = Path(run_cfg.shared_cache_path)
-        if not latents_path.is_absolute():
+        shared_cache_base = Path(run_cfg.shared_cache_path)
+        if not shared_cache_base.is_absolute():
             # Make relative paths relative to current working directory
-            latents_path = Path.cwd() / latents_path
-        print(f"Using shared activation cache: {latents_path}")
+            shared_cache_base = Path.cwd() / shared_cache_base
+        # The latents_path points to the latents subdirectory within the shared cache
+        latents_path = shared_cache_base / "latents"
+        print(f"Using shared activation cache: {shared_cache_base}")
+        print(f"Latents directory: {latents_path}")
     else:
         # Use experiment-specific cache directory
         latents_path = base_path / "latents"
@@ -426,7 +430,8 @@ async def run(
 
     del model, hookpoint_to_sparse_encode
     
-    # Unload model
+    # Clear lingering references immediately
+    gc.collect()
     torch.cuda.empty_cache()
     
     if run_cfg.constructor_cfg.non_activating_source == "neighbours":
@@ -464,7 +469,9 @@ async def run(
         )
 
     if run_cfg.verbose:
-        log_results(scores_path, visualize_path, run_cfg.hookpoints, run_cfg.scorers)
+        log_results(
+            scores_path, visualize_path, latents_path, run_cfg.hookpoints, run_cfg.scorers
+        )
 
 
 if __name__ == "__main__":
