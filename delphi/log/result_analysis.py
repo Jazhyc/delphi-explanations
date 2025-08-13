@@ -74,6 +74,209 @@ def plot_per_feature_f1_scores(df: pd.DataFrame, out_dir: Path):
         fig.write_image(out_dir / f"{label}_f1_distribution.pdf")
 
 
+def plot_model_comparison_density(model_results: dict, out_dir: Path):
+    """Plot density vs accuracy for different models."""
+    out_dir.mkdir(exist_ok=True, parents=True)
+    
+    # Combine all model data
+    all_data = []
+    for model_name, data in model_results.items():
+        for score_type in data['processed_df']['score_type'].unique():
+            score_data = data['processed_df'][data['processed_df']['score_type'] == score_type].iloc[0]
+            all_data.append({
+                'model': model_name,
+                'score_type': score_type,
+                'accuracy': score_data['accuracy'],
+                'f1_score': score_data['f1_score'],
+                'precision': score_data['precision'],
+                'recall': score_data['recall']
+            })
+    
+    df = pd.DataFrame(all_data)
+    
+    # Create density plots for each score type
+    for score_type in df['score_type'].unique():
+        score_df = df[df['score_type'] == score_type]
+        
+        fig = px.violin(
+            score_df, 
+            x='model', 
+            y='accuracy',
+            title=f'Accuracy Distribution by Model - {score_type.title()}',
+            points="all"
+        )
+        fig.update_layout(
+            yaxis_range=[0, 1],
+            xaxis_title="Model",
+            yaxis_title="Accuracy",
+            xaxis={'tickangle': 45}
+        )
+        fig.write_image(out_dir / f"accuracy_density_{score_type}.pdf")
+
+
+def plot_model_comparison_bar(model_results: dict, out_dir: Path):
+    """Plot bar chart of mean accuracy for each model."""
+    out_dir.mkdir(exist_ok=True, parents=True)
+    
+    # Combine all model data
+    all_data = []
+    for model_name, data in model_results.items():
+        for score_type in data['processed_df']['score_type'].unique():
+            score_data = data['processed_df'][data['processed_df']['score_type'] == score_type].iloc[0]
+            all_data.append({
+                'model': model_name,
+                'score_type': score_type,
+                'accuracy': score_data['accuracy'],
+                'f1_score': score_data['f1_score'],
+                'precision': score_data['precision'],
+                'recall': score_data['recall']
+            })
+    
+    df = pd.DataFrame(all_data)
+    
+    # Create bar plots for each score type
+    for score_type in df['score_type'].unique():
+        score_df = df[df['score_type'] == score_type]
+        
+        fig = px.bar(
+            score_df, 
+            x='model', 
+            y='accuracy',
+            title=f'Mean Accuracy by Model - {score_type.title()}',
+            text='accuracy'
+        )
+        fig.update_layout(
+            yaxis_range=[0, 1],
+            xaxis_title="Model",
+            yaxis_title="Accuracy",
+            xaxis={'tickangle': 45}
+        )
+        fig.update_traces(texttemplate='%{text:.3f}', textposition='outside')
+        fig.write_image(out_dir / f"accuracy_bar_{score_type}.pdf")
+
+
+def plot_token_usage_analysis(model_stats: dict, out_dir: Path):
+    """Plot token usage statistics for different models."""
+    out_dir.mkdir(exist_ok=True, parents=True)
+    
+    # Prepare data for token analysis
+    token_data = []
+    for model_name, stats in model_stats.items():
+        if stats:  # Check if stats exist
+            for explainer_type, explainer_stats in stats.items():
+                token_data.append({
+                    'model': model_name,
+                    'explainer_type': explainer_type,
+                    'prompt_tokens': explainer_stats.get('prompt_tokens', 0),
+                    'completion_tokens': explainer_stats.get('completion_tokens', 0),
+                    'total_time': explainer_stats.get('total_time', 0),
+                    'count': explainer_stats.get('count', 0)
+                })
+    
+    if not token_data:
+        print("No token usage data available")
+        return
+    
+    df = pd.DataFrame(token_data)
+    df['total_tokens'] = df['prompt_tokens'] + df['completion_tokens']
+    df['avg_tokens_per_call'] = df['total_tokens'] / df['count'].replace(0, 1)
+    df['avg_time_per_call'] = df['total_time'] / df['count'].replace(0, 1)
+    
+    # Plot total tokens used
+    fig = px.bar(
+        df, 
+        x='model', 
+        y='total_tokens',
+        color='explainer_type',
+        title='Total Tokens Used by Model',
+        text='total_tokens'
+    )
+    fig.update_layout(xaxis={'tickangle': 45})
+    fig.update_traces(texttemplate='%{text:,.0f}', textposition='outside')
+    fig.write_image(out_dir / "total_tokens_usage.pdf")
+    
+    # Plot average tokens per call
+    fig = px.bar(
+        df, 
+        x='model', 
+        y='avg_tokens_per_call',
+        color='explainer_type',
+        title='Average Tokens per Explanation Call',
+        text='avg_tokens_per_call'
+    )
+    fig.update_layout(xaxis={'tickangle': 45})
+    fig.update_traces(texttemplate='%{text:.1f}', textposition='outside')
+    fig.write_image(out_dir / "avg_tokens_per_call.pdf")
+    fig.write_html(out_dir / "avg_tokens_per_call.html")
+    
+    # Plot average time per call
+    fig = px.bar(
+        df, 
+        x='model', 
+        y='avg_time_per_call',
+        color='explainer_type',
+        title='Average Time per Explanation Call (seconds)',
+        text='avg_time_per_call'
+    )
+    fig.update_layout(xaxis={'tickangle': 45})
+    fig.update_traces(texttemplate='%{text:.2f}', textposition='outside')
+    fig.write_image(out_dir / "avg_time_per_call.pdf")
+    fig.write_html(out_dir / "avg_time_per_call.html")
+
+
+def load_model_results(results_dir: Path, model_name_mapping: dict):
+    """Load results for all models and return processed data."""
+    model_results = {}
+    model_stats = {}
+    
+    for result_dir in results_dir.glob("*_explanation_comparison"):
+        if not result_dir.is_dir():
+            continue
+            
+        # Extract model name and apply mapping
+        raw_model_name = result_dir.name.replace("_explanation_comparison", "")
+        clean_model_name = model_name_mapping.get(raw_model_name, raw_model_name)
+        
+        scores_path = result_dir / "scores"
+        latents_path = result_dir / "latents"
+        
+        if not scores_path.exists() or not latents_path.exists():
+            print(f"Skipping {result_dir.name}: missing scores or latents directory")
+            continue
+            
+        try:
+            # Load scoring data
+            modules = ["layer_32/width_131k/average_l0_51"]  # Adjust based on your hookpoints
+            latent_df, counts = load_data(scores_path, latents_path, modules)
+            
+            if latent_df.empty:
+                print(f"No data found for {clean_model_name}")
+                continue
+                
+            latent_df = add_latent_f1(latent_df)
+            processed_df = get_agg_metrics(latent_df, counts)
+            
+            model_results[clean_model_name] = {
+                'latent_df': latent_df,
+                'processed_df': processed_df,
+                'counts': counts
+            }
+            
+            # Load explainer stats if available
+            stats_file = result_dir / "explainer_stats.json"
+            if stats_file.exists():
+                with open(stats_file, 'r') as f:
+                    model_stats[clean_model_name] = orjson.loads(f.read())
+            else:
+                model_stats[clean_model_name] = None
+                
+        except Exception as e:
+            print(f"Error loading data for {clean_model_name}: {e}")
+            continue
+    
+    return model_results, model_stats
+
+
 def plot_roc_curve(df: pd.DataFrame, out_dir: Path):
     if not df.probability.nunique():
         return
@@ -290,13 +493,13 @@ def get_agg_metrics(
 
 def add_latent_f1(latent_df: pd.DataFrame) -> pd.DataFrame:
     f1s = (
-        latent_df.groupby(["module", "latent_idx"])
+        latent_df.groupby(["module", "latent_idx", "score_type"])
         .apply(
             lambda g: compute_classification_metrics(compute_confusion(g))["f1_score"]
         )
         .reset_index(name="f1_score")  # <- naive (un-weighted) F1
     )
-    return latent_df.merge(f1s, on=["module", "latent_idx"])
+    return latent_df.merge(f1s, on=["module", "latent_idx", "score_type"])
 
 
 def log_results(

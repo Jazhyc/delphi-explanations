@@ -24,8 +24,11 @@ CACHE_DIR = "results/cache_google_gemma-2-9b-it"
 # Explainer models to test
 EXPLAINER_MODELS = [
     # "RedHatAI/gemma-3-4b-it-quantized.w4a16",
-    "RedHatAI/Qwen3-4B-quantized.w4a16",
-    # "RedHatAI/SmolLM3-3B-quantized.w4a16"
+    # "RedHatAI/Qwen3-4B-quantized.w4a16",
+    # "RedHatAI/gemma-3-12b-it-quantized.w4a16",
+    # "RedHatAI/gemma-3-27b-it-quantized.w4a16",
+    # "RedHatAI/Qwen3-14B-quantized.w4a16",
+    "RedHatAI/Qwen3-32B-quantized.w4a16"
 ]
 
 def get_model_name(model_path: str) -> str:
@@ -53,13 +56,19 @@ def setup_shared_cache() -> None:
 def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
     """Run a single experiment with the specified explainer model."""
     model_name = get_model_name(explainer_model)
-    experiment_name = f"explainer_comparison_{model_name}"
+    experiment_name = f"{model_name}_explanation_comparison"
     
     print(f"=== Running experiment with {explainer_model} ===")
     print(f"Experiment name: {experiment_name}")
     print(f"Start time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     
     start_time = time.time()
+    
+    # Calculate number of GPUs based on GPU IDs
+    gpu_ids = [id.strip() for id in gpu_id.split(',') if id.strip()]
+    num_gpus = len(gpu_ids)
+    
+    print(f"Using GPUs: {gpu_ids} (total: {num_gpus})")
     
     # Prepare the command
     cmd = [
@@ -70,7 +79,7 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
         "--hookpoints", HOOKPOINT,
         "--explainer_model", explainer_model,
         "--scorers", "fuzz", "detection",
-        "--num_gpus", "1",
+        "--num_gpus", str(num_gpus),
         "--max_latents", "100",
         "--shared_cache_path", CACHE_DIR,
         "--dataset_repo", DATASET_REPO,
@@ -121,11 +130,13 @@ def main():
     """Main execution function."""
     # Get GPU ID from environment or use default
     gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "3")
+    gpu_ids = [id.strip() for id in gpu_id.split(',') if id.strip()]
+    num_gpus = len(gpu_ids)
     
     print("=== Delphi Explainer Model Comparison Experiments ===")
     print(f"Base model: {BASE_MODEL}")
     print(f"Sparse model: {SPARSE_MODEL}")
-    print(f"Using GPU: {gpu_id}")
+    print(f"Using GPUs: {gpu_ids} (total: {num_gpus})")
     print(f"Cache directory: {CACHE_DIR}")
     print()
     
