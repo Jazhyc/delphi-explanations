@@ -94,7 +94,8 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
         "--n_examples_test", "100",
         "--train_type", "random",
         "--test_type", "quantiles",
-        "--filter_bos"
+        "--filter_bos",
+        # "--max_num_seqs", "64" # Needed for larger Qwen models to not OOM
     ]
     
     # Add HF token if available
