@@ -28,7 +28,8 @@ dependencies = [
     "anyio>=4.8.0",
     "faiss-cpu",
     "asyncer>=0.0.8",
-    "beartype"
+    "beartype",
+    "flashinfer-python>=0.2.11.post1",
 ]
 
 [project.optional-dependencies]

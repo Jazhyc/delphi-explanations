@@ -260,8 +260,8 @@ async def plot_examples(raw_dir, hookpoint: str, features: list[int]):
 
 
 # %%
-raw_dir = Path("latents")
-hookpoint = "layers.10"
-selected_features = [0]
+raw_dir = Path("../results/cache_google_gemma-2-9b-it/latents")
+hookpoint = "layers.32"
+selected_features = [0, 1, 2, 3, 4, 5, 6]
 top_level_await(plot_examples(raw_dir, hookpoint, selected_features))
 # %%

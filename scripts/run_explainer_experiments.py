@@ -12,23 +12,25 @@ from pathlib import Path
 from typing import List, Tuple
 
 # Configuration
-BASE_MODEL = "google/gemma-2-9b-it"
-SPARSE_MODEL = "google/gemma-scope-9b-pt-res"
-HOOKPOINT = "layer_32/width_131k/average_l0_51"
+BASE_MODEL = "EleutherAI/pythia-160m"
+SPARSE_MODEL = "EleutherAI/sae-pythia-160m-32k"
+HOOKPOINT = "layers.3.mlp"
 DATASET_REPO = "EleutherAI/rpj-v2-sample"
 DATASET_NAME = "default"
 DATASET_COLUMN = "raw_content"
-CACHE_DIR = "results/cache_google_gemma-2-9b-it"
+CACHE_DIR = "results/pythia-160m"
 # Cache is organized per layer (e.g., layers.32/) for cleaner structure
 
 # Explainer models to test
 EXPLAINER_MODELS = [
     # "RedHatAI/gemma-3-4b-it-quantized.w4a16",
     # "RedHatAI/Qwen3-4B-quantized.w4a16",
-    # "RedHatAI/gemma-3-12b-it-quantized.w4a16",
-    # "RedHatAI/gemma-3-27b-it-quantized.w4a16",
-    # "RedHatAI/Qwen3-14B-quantized.w4a16",
-    "RedHatAI/Qwen3-32B-quantized.w4a16"
+    "RedHatAI/gemma-3-12b-it-quantized.w4a16",
+    "RedHatAI/gemma-3-27b-it-quantized.w4a16",
+    "RedHatAI/Qwen3-14B-quantized.w4a16",
+    "RedHatAI/Qwen3-32B-quantized.w4a16",
+    "RedHatAI/Llama-3.3-70B-Instruct-quantized.w4a16",
+    "RedHatAI/Llama-3.1-70B-Instruct-NVFP4"
 ]
 
 def get_model_name(model_path: str) -> str:
@@ -56,7 +58,7 @@ def setup_shared_cache() -> None:
 def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
     """Run a single experiment with the specified explainer model."""
     model_name = get_model_name(explainer_model)
-    experiment_name = f"{model_name}_explanation_comparison"
+    experiment_name = f"pythia_{model_name}_explanation_comparison"
     
     print(f"=== Running experiment with {explainer_model} ===")
     print(f"Experiment name: {experiment_name}")
@@ -92,10 +94,10 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
         "--n_non_activating", "100",
         "--n_examples_train", "40",
         "--n_examples_test", "100",
-        "--train_type", "random",
+        "--train_type", "quantiles",
         "--test_type", "quantiles",
         "--filter_bos",
-        # "--max_num_seqs", "64" # Needed for larger Qwen models to not OOM
+        "--max_num_seqs", "64" # Needed for larger models to not OOM
     ]
     
     # Add HF token if available
@@ -130,7 +132,7 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
 def main():
     """Main execution function."""
     # Get GPU ID from environment or use default
-    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "3")
+    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "2,3")
     gpu_ids = [id.strip() for id in gpu_id.split(',') if id.strip()]
     num_gpus = len(gpu_ids)
     
