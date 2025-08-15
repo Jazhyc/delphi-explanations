@@ -13,24 +13,28 @@ from typing import List, Tuple
 
 # Configuration
 BASE_MODEL = "EleutherAI/pythia-160m"
-SPARSE_MODEL = "EleutherAI/sae-pythia-160m-32k"
+SPARSE_MODEL = "EleutherAI/Pythia-160m-SST-k32-32k"
 HOOKPOINT = "layers.3.mlp"
 DATASET_REPO = "EleutherAI/rpj-v2-sample"
 DATASET_NAME = "default"
 DATASET_COLUMN = "raw_content"
-CACHE_DIR = "results/pythia-160m"
+CACHE_DIR = "results/pythia-160m-st"
+THINKING_MODE = True  # Set to True to enable thinking mode
 # Cache is organized per layer (e.g., layers.32/) for cleaner structure
 
 # Explainer models to test
 EXPLAINER_MODELS = [
     # "RedHatAI/gemma-3-4b-it-quantized.w4a16",
     # "RedHatAI/Qwen3-4B-quantized.w4a16",
-    "RedHatAI/gemma-3-12b-it-quantized.w4a16",
-    "RedHatAI/gemma-3-27b-it-quantized.w4a16",
-    "RedHatAI/Qwen3-14B-quantized.w4a16",
+    # "RedHatAI/gemma-3-12b-it-quantized.w4a16",
+    # "RedHatAI/gemma-3-27b-it-quantized.w4a16",
+    # "RedHatAI/Qwen3-14B-quantized.w4a16",
     "RedHatAI/Qwen3-32B-quantized.w4a16",
-    "RedHatAI/Llama-3.3-70B-Instruct-quantized.w4a16",
-    "RedHatAI/Llama-3.1-70B-Instruct-NVFP4"
+    # "RedHatAI/Llama-3.3-70B-Instruct-quantized.w4a16",
+    # "RedHatAI/Llama-3.1-70B-Instruct-NVFP4",
+    # "RedHatAI/Llama-4-Scout-17B-16E-Instruct-quantized.w4a16",
+    # "RedHatAI/Llama-4-Maverick-17B-128E-Instruct-quantized.w4a16",
+    # "Qwen/Qwen3-235B-A22B-GPTQ-Int4"
 ]
 
 def get_model_name(model_path: str) -> str:
@@ -58,7 +62,12 @@ def setup_shared_cache() -> None:
 def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
     """Run a single experiment with the specified explainer model."""
     model_name = get_model_name(explainer_model)
-    experiment_name = f"pythia_{model_name}_explanation_comparison"
+    
+    # Build experiment name based on thinking mode
+    if THINKING_MODE:
+        experiment_name = f"pythiaST_{model_name}_thinking_explanation_comparison"
+    else:
+        experiment_name = f"pythia_{model_name}_explanation_comparison"
     
     print(f"=== Running experiment with {explainer_model} ===")
     print(f"Experiment name: {experiment_name}")
@@ -97,8 +106,15 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
         "--train_type", "quantiles",
         "--test_type", "quantiles",
         "--filter_bos",
-        "--max_num_seqs", "64" # Needed for larger models to not OOM
+        "--max_num_seqs", "64", # Needed for larger models to not OOM
     ]
+    
+    # Add thinking mode specific parameters
+    if THINKING_MODE:
+        cmd.extend([
+            "--enable_thinking", "true",
+            "--explainer_model_max_len", "40960",
+        ])
     
     # Add HF token if available
     if "HF_TOKEN" in os.environ:
@@ -132,7 +148,7 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
 def main():
     """Main execution function."""
     # Get GPU ID from environment or use default
-    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "2,3")
+    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "4,5,6,7")
     gpu_ids = [id.strip() for id in gpu_id.split(',') if id.strip()]
     num_gpus = len(gpu_ids)
     
@@ -190,7 +206,10 @@ def main():
     print("Results saved in:")
     for explainer_model in EXPLAINER_MODELS:
         model_name = get_model_name(explainer_model)
-        print(f"  - results/explainer_comparison_{model_name}/")
+        if THINKING_MODE:
+            print(f"  - results/pythiaST_{model_name}_thinking_explanation_comparison/")
+        else:
+            print(f"  - results/pythia_{model_name}_explanation_comparison/")
     
     print()
     print(f"Shared cache location: {CACHE_DIR}")
