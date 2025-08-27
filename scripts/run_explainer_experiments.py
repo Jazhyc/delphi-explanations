@@ -69,7 +69,7 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
     if THINKING_MODE:
         experiment_name = f"pythiaST_{model_name}_thinking_explanation_comparison"
     else:
-        experiment_name = f"pythia_{model_name}_explanation_comparison"
+        experiment_name = f"pythiaST_{model_name}_explanation_comparison"
     
     print(f"=== Running experiment with {explainer_model} ===")
     print(f"Experiment name: {experiment_name}")

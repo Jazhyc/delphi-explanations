@@ -88,7 +88,7 @@ class Explainer(ABC):
 
     def parse_explanation(self, text: str) -> str:
         try:
-            match = re.search(r"\[EXPLANATION\]:\s*(.*)", text, re.DOTALL)
+            match = re.search(r"\[DESCRIPTION\]:\s*(.*)", text, re.DOTALL)
             if match:
                 return match.group(1).strip()
             else:
@@ -107,17 +107,17 @@ class Explainer(ABC):
         i = 0
         while i < len(str_toks):
             if check(i):
-                result += "<<"
+                result += "{{"
 
                 while i < len(str_toks) and check(i):
                     result += str_toks[i]
                     i += 1
-                result += ">>"
+                result += "}}"
             else:
                 result += str_toks[i]
                 i += 1
 
-        return "".join(result)
+        return result
 
     def _join_activations(
         self,

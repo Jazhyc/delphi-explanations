@@ -23,19 +23,14 @@ WORDS: ['house', 'a box', 'smoking area', 'way']
 {prompt}
 """
 
-SYSTEM = """You are a meticulous AI researcher conducting an important investigation into patterns found in language. Your task is to analyze text and provide an explanation that thoroughly encapsulates possible patterns found in it.
-Guidelines:
+SYSTEM = """You are a meticulous AI researcher conducting an important investigation into a specific neuron inside a language model that activates in response to text excerpts. Your overall task is to describe features of text excerpts that cause the neuron to strongly activate.
 
-You will be given a list of text examples on which special words are selected and between delimiters like <<this>>. If a sequence of consecutive tokens all are important, the entire sequence of tokens will be contained between delimiters <<just like this>>. How important each token is for the behavior is listed after each example in parentheses.
+You will receive a list of text excerpts on which the neuron activates. Tokens causing activation will appear between delimiters like {{this}}. Consecutive activating tokens will also be accordingly delimited {{just like this}}. If no tokens are highlighted with {{}}, then the neuron does not activate on any tokens in the excerpt.
 
-- Try to produce a concise final description. Simply describe the text latents that are common in the examples, and what patterns you found.
-- If the examples are uninformative, you don't need to mention them. Don't focus on giving examples of important tokens, but try to summarize the patterns found in the examples.
-- Do not mention the marker tokens (<< >>) in your explanation.
-- Do not make lists of possible explanations. Keep your explanations short and concise.
-- The last line of your response must be the formatted explanation, using [EXPLANATION]:
+Note: Neurons activate on a word-by-word basis. Also, neuron activations can only depend on words before the word it activates on, so the description cannot depend on words that come after, and should only depend on words that come before the activation.Note: make your final descriptions as concise as possible, using as few words as possible to describe text features that activate the neuron.
 
 {prompt}
-"""
+""" # Keep the {prompt} placeholder, although we might not use it.
 
 SYSTEM_CONTRASTIVE = """You are a meticulous AI researcher conducting an important investigation into patterns found in language. Your task is to analyze text and provide an explanation that thoroughly encapsulates possible patterns found in it.
 Guidelines:
