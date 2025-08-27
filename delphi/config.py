@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 from multiprocessing import cpu_count
 from typing import Literal
+import json
 
 import torch
 from simple_parsing import Serializable, field, list_field
@@ -232,6 +233,22 @@ class RunConfig(Serializable):
     )
     """Whether to enable thinking mode in the chat template for offline models.
     This allows reasoning models to use internal thinking tokens."""
+
+    rope_scaling: str | None = field(
+        default=None,
+    )
+    """RoPE scaling configuration for models that support extended context.
+    Should be a JSON string with scaling parameters like '{"rope_type":"yarn","factor":4.0,"original_max_position_embeddings":32768}'."""
+
+    @property
+    def rope_scaling_dict(self) -> dict | None:
+        """Parse the rope_scaling JSON string into a dictionary."""
+        if self.rope_scaling is None:
+            return None
+        try:
+            return json.loads(self.rope_scaling)
+        except json.JSONDecodeError:
+            raise ValueError(f"Invalid JSON in rope_scaling: {self.rope_scaling}")
 
     overwrite: list[Literal["cache", "neighbours", "scores"]] = list_field(
         choices=["cache", "neighbours", "scores"],

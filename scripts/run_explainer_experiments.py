@@ -19,7 +19,7 @@ DATASET_REPO = "EleutherAI/rpj-v2-sample"
 DATASET_NAME = "default"
 DATASET_COLUMN = "raw_content"
 CACHE_DIR = "results/pythia-160m-st"
-THINKING_MODE = True  # Set to True to enable thinking mode
+THINKING_MODE = False  # Set to True to enable thinking mode
 # Cache is organized per layer (e.g., layers.32/) for cleaner structure
 
 # Explainer models to test
@@ -113,7 +113,8 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
     if THINKING_MODE:
         cmd.extend([
             "--enable_thinking", "true",
-            "--explainer_model_max_len", "40960",
+            "--explainer_model_max_len", "131072",
+            "--rope_scaling", '{"rope_type":"yarn","factor":4.0,"original_max_position_embeddings":32768}'
         ])
     
     # Add HF token if available

@@ -53,6 +53,7 @@ class Offline(Client):
         statistics: bool = False,
         expert_parallel: bool = False,
         enable_thinking: bool = False,
+        rope_scaling: dict | None = None,
     ):
         """Client for offline generation. Models not already present in the on-disk
         HuggingFace cache will be downloaded. Note that temperature must be increased
@@ -71,6 +72,7 @@ class Offline(Client):
             max_model_len=max_model_len,
             enforce_eager=enforce_eager,
             enable_expert_parallel=expert_parallel,
+            rope_scaling=rope_scaling,
         )
         self.sampling_params = SamplingParams(max_tokens=number_tokens_to_generate)
         self.tokenizer = AutoTokenizer.from_pretrained(model)
