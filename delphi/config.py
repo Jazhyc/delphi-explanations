@@ -128,6 +128,11 @@ class RunConfig(Serializable):
         default="hugging-quants/Meta-Llama-3.1-70B-Instruct-AWQ-INT4",
     )
     """Name of the model to use for explanation and scoring."""
+    
+    scorer_model: str | None = field(
+        default=None,
+    )
+    """Name of the model to use for scoring. If not provided, the `explainer_model` will be used."""
 
     explainer_model_max_len: int = field(
         default=5120,

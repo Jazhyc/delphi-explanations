@@ -63,17 +63,20 @@ class Offline(Client):
         self.model = model
         self.queue = asyncio.Queue()
         self.task = None
-        self.client = LLM(
-            model=model,
-            gpu_memory_utilization=max_memory,
-            enable_prefix_caching=prefix_caching,
-            max_num_seqs=max_num_seqs,
-            tensor_parallel_size=num_gpus,
-            max_model_len=max_model_len,
-            enforce_eager=enforce_eager,
-            enable_expert_parallel=expert_parallel,
-            rope_scaling=rope_scaling,
-        )
+        llm_kwargs = {
+            "model": model,
+            "gpu_memory_utilization": max_memory,
+            "enable_prefix_caching": prefix_caching,
+            "max_num_seqs": max_num_seqs,
+            "tensor_parallel_size": num_gpus,
+            "max_model_len": max_model_len,
+            "enforce_eager": enforce_eager,
+            "enable_expert_parallel": expert_parallel,
+        }
+        if rope_scaling is not None:
+            llm_kwargs["rope_scaling"] = rope_scaling
+
+        self.client = LLM(**llm_kwargs)
         self.sampling_params = SamplingParams(max_tokens=number_tokens_to_generate)
         self.tokenizer = AutoTokenizer.from_pretrained(model)
         self.batch_size = batch_size

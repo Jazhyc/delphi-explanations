@@ -111,6 +111,230 @@ def create_neighbours(
         neighbour_calculator.save_neighbour_cache(f"{neighbours_path}/{hookpoint}")
 
 
+async def generate_explanations(
+    run_cfg: RunConfig,
+    latents_path: Path,
+    explanations_path: Path,
+    hookpoints: list[str],
+    tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
+    latent_range: Tensor | None,
+):
+    """Stage 1: Loads the explainer model, generates explanations for all latents,
+    and saves them to disk before unloading the model.
+    """
+    print("--- Starting Stage 1: Explanation Generation ---")
+    explanations_path.mkdir(parents=True, exist_ok=True)
+
+    if latent_range is None:
+        latent_dict = None
+    else:
+        latent_dict = {hook: latent_range for hook in hookpoints}
+
+    dataset = LatentDataset(
+        raw_dir=latents_path,
+        sampler_cfg=run_cfg.sampler_cfg,
+        constructor_cfg=run_cfg.constructor_cfg,
+        modules=hookpoints,
+        latents=latent_dict,
+        tokenizer=tokenizer,
+    )
+
+    if run_cfg.explainer == "none":
+        print("Explainer set to 'none' - skipping explanation generation stage.")
+        return
+
+    # Initialize explainer LLM client
+    if run_cfg.explainer_provider == "offline":
+        llm_client = Offline(
+            run_cfg.explainer_model,
+            max_memory=0.9,
+            max_model_len=run_cfg.explainer_model_max_len,
+            num_gpus=run_cfg.num_gpus,
+            statistics=run_cfg.verbose,
+            max_num_seqs=run_cfg.max_num_seqs,
+            expert_parallel=run_cfg.enable_expert_parallel,
+            enable_thinking=run_cfg.enable_thinking,
+            rope_scaling=run_cfg.rope_scaling_dict,
+        )
+    elif run_cfg.explainer_provider == "openrouter":
+        if "OPENROUTER_API_KEY" not in os.environ or not os.environ["OPENROUTER_API_KEY"]:
+            raise ValueError(
+                "OPENROUTER_API_KEY environment variable not set. Set `--explainer-provider offline` to use a local explainer model."
+            )
+        llm_client = OpenRouter(run_cfg.explainer_model, api_key=os.environ["OPENROUTER_API_KEY"])  # type: ignore
+    else:
+        raise ValueError(f"Explainer provider {run_cfg.explainer_provider} not supported")
+
+    def explainer_postprocess(result):
+        with open(explanations_path / f"{result.record.latent}.txt", "wb") as f:
+            f.write(orjson.dumps(result.explanation))
+        return result
+
+    if run_cfg.constructor_cfg.non_activating_source == "FAISS":
+        explainer = ContrastiveExplainer(llm_client, threshold=0.3, verbose=run_cfg.verbose)
+    else:
+        explainer = DefaultExplainer(llm_client, threshold=0.3, verbose=run_cfg.verbose)
+
+    explainer_pipe = Pipe(process_wrapper(explainer, postprocess=explainer_postprocess))
+
+    pipeline = Pipeline(dataset, explainer_pipe)
+    await pipeline.run(run_cfg.pipeline_num_proc)
+
+    # Save explainer stats
+    stats_path = explanations_path.parent / "explainer_stats.json"
+    stats_to_save = {key: dict(value) for key, value in explainer.stats.items()}
+    with open(stats_path, "wb") as f:
+        f.write(orjson.dumps(stats_to_save, option=orjson.OPT_INDENT_2))
+
+    # Unload the model
+    close_fn = getattr(llm_client, "close", None)
+    if callable(close_fn):
+        # close may be async or sync
+        if asyncio.iscoroutinefunction(close_fn):
+            await close_fn()
+        else:
+            close_fn()
+    del llm_client
+    del explainer
+    del pipeline
+    gc.collect()
+    torch.cuda.empty_cache()
+    print("--- Finished Stage 1: Explainer model unloaded. ---")
+
+
+async def run_scoring(
+    run_cfg: RunConfig,
+    latents_path: Path,
+    explanations_path: Path,
+    scores_path: Path,
+    hookpoints: list[str],
+    tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
+    latent_range: Tensor | None,
+):
+    """Stage 2: Loads the scorer model, reads explanations from disk, runs all scorers,
+    and saves the scores before unloading the model.
+    """
+    print("--- Starting Stage 2: Scoring ---")
+
+    if latent_range is None:
+        latent_dict = None
+    else:
+        latent_dict = {hook: latent_range for hook in hookpoints}
+
+    dataset = LatentDataset(
+        raw_dir=latents_path,
+        sampler_cfg=run_cfg.sampler_cfg,
+        constructor_cfg=run_cfg.constructor_cfg,
+        modules=hookpoints,
+        latents=latent_dict,
+        tokenizer=tokenizer,
+    )
+
+    # Determine scorer model name (fallback to explainer model)
+    scorer_model_name = run_cfg.scorer_model if getattr(run_cfg, "scorer_model", None) else run_cfg.explainer_model
+    print(f"Loading scorer model: {scorer_model_name}")
+
+    # Initialize scorer LLM client
+    if run_cfg.explainer_provider == "offline":
+        scorer_llm_client = Offline(
+            scorer_model_name,
+            max_memory=0.9,
+            max_model_len=run_cfg.explainer_model_max_len,
+            num_gpus=run_cfg.num_gpus,
+            statistics=run_cfg.verbose,
+            max_num_seqs=run_cfg.max_num_seqs,
+            expert_parallel=run_cfg.enable_expert_parallel,
+            enable_thinking=run_cfg.enable_thinking,
+            rope_scaling=run_cfg.rope_scaling_dict,
+        )
+    elif run_cfg.explainer_provider == "openrouter":
+        if "OPENROUTER_API_KEY" not in os.environ or not os.environ["OPENROUTER_API_KEY"]:
+            raise ValueError(
+                "OPENROUTER_API_KEY environment variable not set. Set `--explainer-provider offline` to use a local explainer model."
+            )
+        scorer_llm_client = OpenRouter(scorer_model_name, api_key=os.environ["OPENROUTER_API_KEY"])  # type: ignore
+    else:
+        raise ValueError(f"Explainer provider {run_cfg.explainer_provider} not supported")
+
+    # NoOp explainer loads explanations from disk
+    def none_postprocessor(result):
+        explanation_path = explanations_path / f"{result.record.latent}.txt"
+        if not explanation_path.exists():
+            raise FileNotFoundError(f"Explanation file {explanation_path} does not exist.")
+        with open(explanation_path, "rb") as f:
+            return ExplainerResult(record=result.record, explanation=orjson.loads(f.read()))
+
+    explainer_pipe = Pipe(process_wrapper(NoOpExplainer(), postprocess=none_postprocessor))
+
+    # scorer preprocess/postprocess
+    def scorer_preprocess(result):
+        if isinstance(result, list):
+            result = result[0]
+        record = result.record
+        record.explanation = result.explanation
+        record.extra_examples = record.not_active
+        return record
+
+    def scorer_postprocess(result, score_dir):
+        safe_latent_name = str(result.record.latent).replace("/", "--")
+        with open(score_dir / f"{safe_latent_name}.txt", "wb") as f:
+            f.write(orjson.dumps(result.score))
+
+    scorers = []
+    for scorer_name in run_cfg.scorers:
+        scorer_path = scores_path / scorer_name
+        scorer_path.mkdir(parents=True, exist_ok=True)
+        stats_path = scorer_path.parent.parent / f"{scorer_name}_stats.json"
+
+        if scorer_name == "simulation":
+            scorer = OpenAISimulator(scorer_llm_client, tokenizer=tokenizer, all_at_once=False)
+        elif scorer_name == "fuzz":
+            scorer = FuzzingScorer(
+                scorer_llm_client,
+                n_examples_shown=run_cfg.num_examples_per_scorer_prompt,
+                verbose=run_cfg.verbose,
+                log_prob=run_cfg.log_probs,
+                stats_path=stats_path,
+            )
+        elif scorer_name == "detection":
+            scorer = DetectionScorer(
+                scorer_llm_client,
+                n_examples_shown=run_cfg.num_examples_per_scorer_prompt,
+                verbose=run_cfg.verbose,
+                log_prob=run_cfg.log_probs,
+                stats_path=stats_path,
+            )
+        else:
+            raise ValueError(f"Scorer {scorer_name} not supported")
+
+        wrapped_scorer = process_wrapper(
+            scorer,
+            preprocess=scorer_preprocess,
+            postprocess=partial(scorer_postprocess, score_dir=scorer_path),
+        )
+        scorers.append(wrapped_scorer)
+
+    pipeline = Pipeline(dataset, explainer_pipe, Pipe(*scorers))
+    if run_cfg.pipeline_num_proc > 1 and run_cfg.explainer_provider == "openrouter":
+        print("OpenRouter does not support multiprocessing, setting pipeline_num_proc to 1")
+        run_cfg.pipeline_num_proc = 1
+
+    await pipeline.run(run_cfg.pipeline_num_proc)
+
+    # Unload scorer model
+    close_fn = getattr(scorer_llm_client, "close", None)
+    if callable(close_fn):
+        if asyncio.iscoroutinefunction(close_fn):
+            await close_fn()
+        else:
+            close_fn()
+    del scorer_llm_client
+    del pipeline
+    gc.collect()
+    torch.cuda.empty_cache()
+    print("--- Finished Stage 2: Scorer model unloaded. ---")
+
+
 async def process_cache(
     run_cfg: RunConfig,
     latents_path: Path,
@@ -142,13 +366,40 @@ async def process_cache(
         latents=latent_dict,
         tokenizer=tokenizer,
     )
+    
+    def create_llm_client(model_name: str):
+        if run_cfg.explainer_provider == "offline":
+            return Offline(
+                model_name,
+                max_memory=0.9,
+                max_model_len=run_cfg.explainer_model_max_len,
+                num_gpus=run_cfg.num_gpus,
+                statistics=run_cfg.verbose,
+                max_num_seqs=run_cfg.max_num_seqs,
+                expert_parallel=run_cfg.enable_expert_parallel,
+                enable_thinking=run_cfg.enable_thinking,
+                rope_scaling=run_cfg.rope_scaling_dict,
+            )
+        elif run_cfg.explainer_provider == "openrouter":
+            if "OPENROUTER_API_KEY" not in os.environ or not os.environ["OPENROUTER_API_KEY"]:
+                raise ValueError(
+                    "OPENROUTER_API_KEY environment variable not set. Set "
+                    "`--explainer-provider offline` to use a local explainer model."
+                )
+            return OpenRouter(
+                model_name,
+                api_key=os.environ["OPENROUTER_API_KEY"],
+            )
+        else:
+            raise ValueError(
+                f"Explainer provider {run_cfg.explainer_provider} not supported"
+            )
 
     if run_cfg.explainer_provider == "offline":
         llm_client = Offline(
             run_cfg.explainer_model,
             max_memory=0.9,
-            # Explainer models context length - must be able to accommodate the longest
-            # set of examples
+            
             max_model_len=run_cfg.explainer_model_max_len,
             num_gpus=run_cfg.num_gpus,
             statistics=run_cfg.verbose,
@@ -292,11 +543,12 @@ async def process_cache(
     await pipeline.run(run_cfg.pipeline_num_proc)
 
     if not run_cfg.explainer == "none":
-        stats_path = explanations_path.parent / "explainer_stats.json"
-        # explainer.stats is a defaultdict, must convert to dict for serialization.
-        stats_to_save = {key: dict(value) for key, value in explainer.stats.items()}
-        with open(stats_path, "wb") as f:
-            f.write(orjson.dumps(stats_to_save, option=orjson.OPT_INDENT_2))
+        if 'explainer' in locals():
+            stats_path = explanations_path.parent / "explainer_stats.json"
+            # explainer.stats is a defaultdict, must convert to dict for serialization.
+            stats_to_save = {key: dict(value) for key, value in explainer.stats.items()}
+            with open(stats_path, "wb") as f:
+                f.write(orjson.dumps(stats_to_save, option=orjson.OPT_INDENT_2))
 
 
 def populate_cache(
@@ -467,11 +719,29 @@ async def run(
     nrh = assert_type(
         list,
         non_redundant_hookpoints(
+            hookpoints, explanations_path, "scores" in run_cfg.overwrite
+        ),
+    )
+    if nrh:
+        # Stage 1: Generate explanations and unload explainer model
+        await generate_explanations(
+            run_cfg,
+            latents_path,
+            explanations_path,
+            nrh,
+            tokenizer,
+            latent_range,
+        )
+
+    nrh = assert_type(
+        list,
+        non_redundant_hookpoints(
             hookpoints, scores_path, "scores" in run_cfg.overwrite
         ),
     )
     if nrh:
-        await process_cache(
+        # Stage 2: Run scoring using explanations on disk (may use different model)
+        await run_scoring(
             run_cfg,
             latents_path,
             explanations_path,
