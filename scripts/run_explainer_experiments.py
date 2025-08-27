@@ -20,12 +20,13 @@ DATASET_NAME = "default"
 DATASET_COLUMN = "raw_content"
 CACHE_DIR = "results/pythia-160m-st"
 THINKING_MODE = False  # Set to True to enable thinking mode
+USE_SEPARATE_SCORER = False
 # Cache is organized per layer (e.g., layers.32/) for cleaner structure
 
 # Explainer models to test
 EXPLAINER_MODELS = [
     # "RedHatAI/gemma-3-4b-it-quantized.w4a16",
-    # "RedHatAI/Qwen3-4B-quantized.w4a16",
+    "RedHatAI/Qwen3-4B-quantized.w4a16",
     # "RedHatAI/gemma-3-12b-it-quantized.w4a16",
     # "RedHatAI/gemma-3-27b-it-quantized.w4a16",
     # "RedHatAI/Qwen3-14B-quantized.w4a16",
@@ -35,7 +36,7 @@ EXPLAINER_MODELS = [
     # "RedHatAI/Llama-4-Scout-17B-16E-Instruct-quantized.w4a16",
     # "RedHatAI/Llama-4-Maverick-17B-128E-Instruct-quantized.w4a16",
     # "Qwen/Qwen3-235B-A22B-GPTQ-Int4"
-    "Transluce/llama_8b_explainer"
+    # "Transluce/llama_8b_explainer"
 ]
 
 def get_model_name(model_path: str) -> str:
@@ -108,7 +109,6 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
         "--test_type", "quantiles",
         "--filter_bos",
         "--max_num_seqs", "64", # Needed for larger models to not OOM
-        "--scorer_model", "RedHatAI/Qwen3-32B-quantized.w4a16"
     ]
     
     # Add thinking mode specific parameters
@@ -118,7 +118,12 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
             "--explainer_model_max_len", "131072",
             "--rope_scaling", '{"rope_type":"yarn","factor":4.0,"original_max_position_embeddings":32768}'
         ])
-    
+
+    if USE_SEPARATE_SCORER:
+        cmd.extend([
+            "--scorer_model", "RedHatAI/Qwen3-4B-quantized.w4a16"
+        ])
+
     # Add HF token if available
     if "HF_TOKEN" in os.environ:
         cmd.extend(["--hf_token", os.environ["HF_TOKEN"]])
