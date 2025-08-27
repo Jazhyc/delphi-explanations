@@ -118,7 +118,8 @@ async def generate_explanations(
     hookpoints: list[str],
     tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
     latent_range: Tensor | None,
-):
+    scorer_model_name: str | None = None,
+) -> object | None:
     """Stage 1: Loads the explainer model, generates explanations for all latents,
     and saves them to disk before unloading the model.
     """
@@ -141,7 +142,7 @@ async def generate_explanations(
 
     if run_cfg.explainer == "none":
         print("Explainer set to 'none' - skipping explanation generation stage.")
-        return
+        return None
 
     # Initialize explainer LLM client
     if run_cfg.explainer_provider == "offline":
@@ -186,6 +187,13 @@ async def generate_explanations(
     with open(stats_path, "wb") as f:
         f.write(orjson.dumps(stats_to_save, option=orjson.OPT_INDENT_2))
 
+    # If the scorer model requested is the same as the explainer model, keep the
+    # explainer client live and return it so the caller can reuse it and avoid
+    # recompilation. Otherwise unload the client.
+    if scorer_model_name is not None and scorer_model_name == run_cfg.explainer_model:
+        print("Explainer and scorer model identical — keeping model loaded to avoid recompilation.")
+        return llm_client
+
     # Unload the model
     close_fn = getattr(llm_client, "close", None)
     if callable(close_fn):
@@ -200,6 +208,7 @@ async def generate_explanations(
     gc.collect()
     torch.cuda.empty_cache()
     print("--- Finished Stage 1: Explainer model unloaded. ---")
+    return None
 
 
 async def run_scoring(
@@ -210,7 +219,8 @@ async def run_scoring(
     hookpoints: list[str],
     tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
     latent_range: Tensor | None,
-):
+    existing_llm_client: object | None = None,
+) -> None:
     """Stage 2: Loads the scorer model, reads explanations from disk, runs all scorers,
     and saves the scores before unloading the model.
     """
@@ -234,27 +244,31 @@ async def run_scoring(
     scorer_model_name = run_cfg.scorer_model if getattr(run_cfg, "scorer_model", None) else run_cfg.explainer_model
     print(f"Loading scorer model: {scorer_model_name}")
 
-    # Initialize scorer LLM client
-    if run_cfg.explainer_provider == "offline":
-        scorer_llm_client = Offline(
-            scorer_model_name,
-            max_memory=0.9,
-            max_model_len=run_cfg.explainer_model_max_len,
-            num_gpus=run_cfg.num_gpus,
-            statistics=run_cfg.verbose,
-            max_num_seqs=run_cfg.max_num_seqs,
-            expert_parallel=run_cfg.enable_expert_parallel,
-            enable_thinking=run_cfg.enable_thinking,
-            rope_scaling=run_cfg.rope_scaling_dict,
-        )
-    elif run_cfg.explainer_provider == "openrouter":
-        if "OPENROUTER_API_KEY" not in os.environ or not os.environ["OPENROUTER_API_KEY"]:
-            raise ValueError(
-                "OPENROUTER_API_KEY environment variable not set. Set `--explainer-provider offline` to use a local explainer model."
-            )
-        scorer_llm_client = OpenRouter(scorer_model_name, api_key=os.environ["OPENROUTER_API_KEY"])  # type: ignore
+    # Use existing client if provided (e.g., same model reused); otherwise initialize
+    if existing_llm_client is not None:
+        scorer_llm_client = existing_llm_client
     else:
-        raise ValueError(f"Explainer provider {run_cfg.explainer_provider} not supported")
+        # Initialize scorer LLM client
+        if run_cfg.explainer_provider == "offline":
+            scorer_llm_client = Offline(
+                scorer_model_name,
+                max_memory=0.9,
+                max_model_len=run_cfg.explainer_model_max_len,
+                num_gpus=run_cfg.num_gpus,
+                statistics=run_cfg.verbose,
+                max_num_seqs=run_cfg.max_num_seqs,
+                expert_parallel=run_cfg.enable_expert_parallel,
+                enable_thinking=run_cfg.enable_thinking,
+                rope_scaling=run_cfg.rope_scaling_dict,
+            )
+        elif run_cfg.explainer_provider == "openrouter":
+            if "OPENROUTER_API_KEY" not in os.environ or not os.environ["OPENROUTER_API_KEY"]:
+                raise ValueError(
+                    "OPENROUTER_API_KEY environment variable not set. Set `--explainer-provider offline` to use a local explainer model."
+                )
+            scorer_llm_client = OpenRouter(scorer_model_name, api_key=os.environ["OPENROUTER_API_KEY"])  # type: ignore
+        else:
+            raise ValueError(f"Explainer provider {run_cfg.explainer_provider} not supported")
 
     # NoOp explainer loads explanations from disk
     def none_postprocessor(result):
@@ -716,21 +730,26 @@ async def run(
     else:
         print("Skipping neighbour creation")
 
+    # Determine scorer model name once (fall back to explainer model)
+    scorer_model_name = run_cfg.scorer_model if getattr(run_cfg, "scorer_model", None) else run_cfg.explainer_model
+
     nrh = assert_type(
         list,
         non_redundant_hookpoints(
             hookpoints, explanations_path, "scores" in run_cfg.overwrite
         ),
     )
+    existing_llm_client = None
     if nrh:
-        # Stage 1: Generate explanations and unload explainer model
-        await generate_explanations(
+        # Stage 1: Generate explanations and possibly return a live client to reuse
+        existing_llm_client = await generate_explanations(
             run_cfg,
             latents_path,
             explanations_path,
             nrh,
             tokenizer,
             latent_range,
+            scorer_model_name=scorer_model_name,
         )
 
     nrh = assert_type(
@@ -740,7 +759,7 @@ async def run(
         ),
     )
     if nrh:
-        # Stage 2: Run scoring using explanations on disk (may use different model)
+        # Stage 2: Run scoring using explanations on disk (may reuse a live client)
         await run_scoring(
             run_cfg,
             latents_path,
@@ -749,6 +768,7 @@ async def run(
             nrh,
             tokenizer,
             latent_range,
+            existing_llm_client=existing_llm_client,
         )
 
     if run_cfg.verbose:
