@@ -20,13 +20,13 @@ DATASET_NAME = "default"
 DATASET_COLUMN = "raw_content"
 CACHE_DIR = "results/pythia-160m-st"
 THINKING_MODE = False  # Set to True to enable thinking mode
-USE_SEPARATE_SCORER = False
+USE_SEPARATE_SCORER = True
 # Cache is organized per layer (e.g., layers.32/) for cleaner structure
 
 # Explainer models to test
 EXPLAINER_MODELS = [
     # "RedHatAI/gemma-3-4b-it-quantized.w4a16",
-    "RedHatAI/Qwen3-4B-quantized.w4a16",
+    # "RedHatAI/Qwen3-4B-quantized.w4a16",
     # "RedHatAI/gemma-3-12b-it-quantized.w4a16",
     # "RedHatAI/gemma-3-27b-it-quantized.w4a16",
     # "RedHatAI/Qwen3-14B-quantized.w4a16",
@@ -36,7 +36,7 @@ EXPLAINER_MODELS = [
     # "RedHatAI/Llama-4-Scout-17B-16E-Instruct-quantized.w4a16",
     # "RedHatAI/Llama-4-Maverick-17B-128E-Instruct-quantized.w4a16",
     # "Qwen/Qwen3-235B-A22B-GPTQ-Int4"
-    # "Transluce/llama_8b_explainer"
+    "Transluce/llama_8b_explainer"
 ]
 
 def get_model_name(model_path: str) -> str:
@@ -121,7 +121,7 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
 
     if USE_SEPARATE_SCORER:
         cmd.extend([
-            "--scorer_model", "RedHatAI/Qwen3-4B-quantized.w4a16"
+            "--scorer_model", "RedHatAI/Qwen3-32B-quantized.w4a16"
         ])
 
     # Add HF token if available
@@ -156,7 +156,7 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
 def main():
     """Main execution function."""
     # Get GPU ID from environment or use default
-    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "3")
+    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "4")
     gpu_ids = [id.strip() for id in gpu_id.split(',') if id.strip()]
     num_gpus = len(gpu_ids)
     
