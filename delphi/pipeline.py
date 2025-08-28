@@ -74,17 +74,19 @@ class Pipeline:
     Manages the execution of multiple pipes, handling concurrency and progress tracking.
     """
 
-    def __init__(self, loader: AsyncIterable | Callable, *pipes: Pipe | Callable):
+    def __init__(self, loader: AsyncIterable | Callable, *pipes: Pipe | Callable, progress_description: str = "Processing"):
         """
         Initialize the Pipeline with a list of pipes.
 
         Args:
             loader (Callable): The loader to be executed first.
             *pipes (list[Pipe | Callable]): Pipes to be executed in the pipeline.
+            progress_description (str): Description for the progress bar. Defaults to "Processing".
         """
 
         self.loader = loader
         self.pipes = pipes
+        self.progress_description = progress_description
 
     async def run(self, max_concurrent: int = 10) -> list[Any]:
         """
@@ -105,7 +107,7 @@ class Pipeline:
         except TypeError:
             total = None
 
-        progress_bar = tqdm(total=total, desc="Generating explanations")
+        progress_bar = tqdm(total=total, desc=self.progress_description)
 
         async def process_and_update(item, semaphore):
             result = await self.process_item(item, semaphore)

@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 """
 Script to run experiments with different explainer models
-Based on the millions of papers replication command
 """
 
 import os
@@ -14,14 +13,14 @@ from typing import List, Tuple
 # Configuration
 BASE_MODEL = "EleutherAI/pythia-160m"
 SPARSE_MODEL = "EleutherAI/Pythia-160m-SST-k32-32k"
+SPARSE_MODEL_NAME = "pythiaST"  # Short name for directory structure
 HOOKPOINT = "layers.3.mlp"
 DATASET_REPO = "EleutherAI/rpj-v2-sample"
 DATASET_NAME = "default"
 DATASET_COLUMN = "raw_content"
-CACHE_DIR = "results/pythia-160m-st"
+MAX_LATENTS = 400  # Main configuration parameter
 THINKING_MODE = False  # Set to True to enable thinking mode
 USE_SEPARATE_SCORER = False
-# Cache is organized per layer (e.g., layers.32/) for cleaner structure
 
 # Explainer models to test
 EXPLAINER_MODELS = [
@@ -32,10 +31,7 @@ EXPLAINER_MODELS = [
     # "RedHatAI/Qwen3-14B-quantized.w4a16",
     # "RedHatAI/Qwen3-32B-quantized.w4a16",
     # "RedHatAI/Llama-3.3-70B-Instruct-quantized.w4a16",
-    # "RedHatAI/Llama-3.1-70B-Instruct-NVFP4",
     # "RedHatAI/Llama-4-Scout-17B-16E-Instruct-quantized.w4a16",
-    # "RedHatAI/Llama-4-Maverick-17B-128E-Instruct-quantized.w4a16",
-    # "Qwen/Qwen3-235B-A22B-GPTQ-Int4"
     # "Transluce/llama_8b_explainer"
 ]
 
@@ -43,11 +39,30 @@ def get_model_name(model_path: str) -> str:
     """Extract a clean model name from the full model path."""
     return model_path.split('/')[-1].replace('-', '_').replace('.', '_')
 
+def get_base_dir() -> Path:
+    """Get the base directory for this sparse model."""
+    return Path("results") / SPARSE_MODEL_NAME
+
+def get_cache_dir() -> Path:
+    """Get the shared cache directory."""
+    return get_base_dir() / "cache"
+
+def get_experiment_dir(explainer_model: str) -> Path:
+    """Get the experiment directory for a specific configuration."""
+    model_name = get_model_name(explainer_model)
+    # Build experiment name components
+    components = [SPARSE_MODEL_NAME, model_name]
+    if THINKING_MODE:
+        components.append("thinking")
+    experiment_name = "_".join(components)
+    # Store in results/pythiaST/{MAX_LATENTS}latents/{experiment_name}
+    return get_base_dir() / f"{MAX_LATENTS}latents" / experiment_name
+
 def setup_shared_cache() -> None:
-    """Set up shared activation cache with per-layer organization."""
+    """Set up shared activation cache."""
     print("Setting up shared activation cache...")
     
-    cache_path = Path(CACHE_DIR)
+    cache_path = get_cache_dir()
     
     if cache_path.exists():
         print(f"Shared cache already exists at {cache_path}")
@@ -63,16 +78,12 @@ def setup_shared_cache() -> None:
 
 def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
     """Run a single experiment with the specified explainer model."""
-    model_name = get_model_name(explainer_model)
-    
-    # Build experiment name based on thinking mode
-    if THINKING_MODE:
-        experiment_name = f"pythiaST_{model_name}_thinking_explanation_comparison"
-    else:
-        experiment_name = f"pythiaST_{model_name}_explanation_comparison"
+    experiment_dir = get_experiment_dir(explainer_model)
+    experiment_name = experiment_dir.name
     
     print(f"=== Running experiment with {explainer_model} ===")
     print(f"Experiment name: {experiment_name}")
+    print(f"Experiment directory: {experiment_dir}")
     print(f"Start time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     
     start_time = time.time()
@@ -88,13 +99,13 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
         "python", "-m", "delphi",
         BASE_MODEL,
         SPARSE_MODEL,
-        "--name", experiment_name,
+        "--name", str(experiment_dir.relative_to(Path("results"))),  # Use relative path from results/
         "--hookpoints", HOOKPOINT,
         "--explainer_model", explainer_model,
         "--scorers", "fuzz", "detection",
         "--num_gpus", str(num_gpus),
-        "--max_latents", "100",
-        "--shared_cache_path", CACHE_DIR,
+        "--max_latents", str(MAX_LATENTS),
+        "--shared_cache_path", str(get_cache_dir()),
         "--dataset_repo", DATASET_REPO,
         "--dataset_name", DATASET_NAME,
         "--dataset_column", DATASET_COLUMN,
@@ -156,15 +167,17 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
 def main():
     """Main execution function."""
     # Get GPU ID from environment or use default
-    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "3")
+    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "4,5,6,7")
     gpu_ids = [id.strip() for id in gpu_id.split(',') if id.strip()]
     num_gpus = len(gpu_ids)
     
     print("=== Delphi Explainer Model Comparison Experiments ===")
     print(f"Base model: {BASE_MODEL}")
     print(f"Sparse model: {SPARSE_MODEL}")
+    print(f"Max latents: {MAX_LATENTS}")
+    print(f"Thinking mode: {THINKING_MODE}")
     print(f"Using GPUs: {gpu_ids} (total: {num_gpus})")
-    print(f"Cache directory: {CACHE_DIR}")
+    print(f"Cache directory: {get_cache_dir()}")
     print()
     
     # Check if we're in the right directory
@@ -213,14 +226,11 @@ def main():
     print()
     print("Results saved in:")
     for explainer_model in EXPLAINER_MODELS:
-        model_name = get_model_name(explainer_model)
-        if THINKING_MODE:
-            print(f"  - results/pythiaST_{model_name}_thinking_explanation_comparison/")
-        else:
-            print(f"  - results/pythia_{model_name}_explanation_comparison/")
+        experiment_dir = get_experiment_dir(explainer_model)
+        print(f"  - {experiment_dir}")
     
     print()
-    print(f"Shared cache location: {CACHE_DIR}")
+    print(f"Shared cache location: {get_cache_dir()}")
 
 if __name__ == "__main__":
     main()

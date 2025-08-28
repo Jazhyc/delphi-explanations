@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import gc
+import time
 from functools import partial
 from pathlib import Path
 from typing import Callable
@@ -178,7 +179,7 @@ async def generate_explanations(
 
     explainer_pipe = Pipe(process_wrapper(explainer, postprocess=explainer_postprocess))
 
-    pipeline = Pipeline(dataset, explainer_pipe)
+    pipeline = Pipeline(dataset, explainer_pipe, progress_description="Generating explanations")
     await pipeline.run(run_cfg.pipeline_num_proc)
 
     # Save explainer stats
@@ -295,6 +296,7 @@ async def run_scoring(
             f.write(orjson.dumps(result.score))
 
     scorers = []
+    
     for scorer_name in run_cfg.scorers:
         scorer_path = scores_path / scorer_name
         scorer_path.mkdir(parents=True, exist_ok=True)
@@ -328,12 +330,24 @@ async def run_scoring(
         )
         scorers.append(wrapped_scorer)
 
-    pipeline = Pipeline(dataset, explainer_pipe, Pipe(*scorers))
+    pipeline = Pipeline(dataset, explainer_pipe, Pipe(*scorers), progress_description="Scoring explanations")
     if run_cfg.pipeline_num_proc > 1 and run_cfg.explainer_provider == "openrouter":
         print("OpenRouter does not support multiprocessing, setting pipeline_num_proc to 1")
         run_cfg.pipeline_num_proc = 1
 
+    # Time the pipeline execution
+    pipeline_start_time = time.time()
     await pipeline.run(run_cfg.pipeline_num_proc)
+    pipeline_end_time = time.time()
+    
+    # Save timing data to JSON file
+    timing_data = {
+        "scoring_time_seconds": pipeline_end_time - pipeline_start_time,
+        "scorers_used": run_cfg.scorers
+    }
+    timing_path = scores_path.parent / "scoring_timing.json"
+    with open(timing_path, "wb") as f:
+        f.write(orjson.dumps(timing_data, option=orjson.OPT_INDENT_2))
 
     # Unload scorer model
     close_fn = getattr(scorer_llm_client, "close", None)
@@ -507,6 +521,7 @@ async def process_cache(
             f.write(orjson.dumps(result.score))
 
     scorers = []
+    
     for scorer_name in run_cfg.scorers:
         scorer_path = scores_path / scorer_name
         scorer_path.mkdir(parents=True, exist_ok=True)
@@ -545,6 +560,7 @@ async def process_cache(
         dataset,
         explainer_pipe,
         Pipe(*scorers),
+        progress_description="Scoring explanations"
     )
 
     if run_cfg.pipeline_num_proc > 1 and run_cfg.explainer_provider == "openrouter":
@@ -554,7 +570,19 @@ async def process_cache(
         )
         run_cfg.pipeline_num_proc = 1
 
+    # Time the pipeline execution
+    pipeline_start_time = time.time()
     await pipeline.run(run_cfg.pipeline_num_proc)
+    pipeline_end_time = time.time()
+    
+    # Save timing data to JSON file
+    timing_data = {
+        "scoring_time_seconds": pipeline_end_time - pipeline_start_time,
+        "scorers_used": run_cfg.scorers
+    }
+    timing_path = explanations_path.parent / "scoring_timing.json"
+    with open(timing_path, "wb") as f:
+        f.write(orjson.dumps(timing_data, option=orjson.OPT_INDENT_2))
 
     if not run_cfg.explainer == "none":
         if 'explainer' in locals():
