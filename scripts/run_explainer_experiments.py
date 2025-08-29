@@ -25,7 +25,7 @@ USE_SEPARATE_SCORER = False
 # Explainer models to test
 EXPLAINER_MODELS = [
     # "RedHatAI/gemma-3-4b-it-quantized.w4a16",
-    "RedHatAI/Qwen3-4B-quantized.w4a16",
+    # "RedHatAI/Qwen3-4B-quantized.w4a16",
     # "RedHatAI/gemma-3-12b-it-quantized.w4a16",
     # "RedHatAI/gemma-3-27b-it-quantized.w4a16",
     # "RedHatAI/Qwen3-14B-quantized.w4a16",
@@ -33,6 +33,8 @@ EXPLAINER_MODELS = [
     # "RedHatAI/Llama-3.3-70B-Instruct-quantized.w4a16",
     # "RedHatAI/Llama-4-Scout-17B-16E-Instruct-quantized.w4a16",
     # "Transluce/llama_8b_explainer"
+    "openai/gpt-oss-20b",
+    "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4"
 ]
 
 def get_model_name(model_path: str) -> str:

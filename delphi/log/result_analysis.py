@@ -224,59 +224,6 @@ def plot_token_usage_analysis(model_stats: dict, out_dir: Path):
     fig.write_html(out_dir / "avg_time_per_call.html")
 
 
-def load_model_results(results_dir: Path, model_name_mapping: dict):
-    """Load results for all models and return processed data."""
-    model_results = {}
-    model_stats = {}
-    
-    for result_dir in results_dir.glob("*_explanation_comparison"):
-        if not result_dir.is_dir():
-            continue
-            
-        # Extract model name and apply mapping
-        raw_model_name = result_dir.name.replace("_explanation_comparison", "")
-        clean_model_name = model_name_mapping.get(raw_model_name, raw_model_name)
-        
-        scores_path = result_dir / "scores"
-        latents_path = result_dir / "latents"
-        
-        if not scores_path.exists() or not latents_path.exists():
-            print(f"Skipping {result_dir.name}: missing scores or latents directory")
-            continue
-            
-        try:
-            # Load scoring data
-            modules = ["layer_32/width_131k/average_l0_51"]  # Adjust based on your hookpoints
-            latent_df, counts = load_data(scores_path, latents_path, modules)
-            
-            if latent_df.empty:
-                print(f"No data found for {clean_model_name}")
-                continue
-                
-            latent_df = add_latent_f1(latent_df)
-            processed_df = get_agg_metrics(latent_df, counts)
-            
-            model_results[clean_model_name] = {
-                'latent_df': latent_df,
-                'processed_df': processed_df,
-                'counts': counts
-            }
-            
-            # Load explainer stats if available
-            stats_file = result_dir / "explainer_stats.json"
-            if stats_file.exists():
-                with open(stats_file, 'r') as f:
-                    model_stats[clean_model_name] = orjson.loads(f.read())
-            else:
-                model_stats[clean_model_name] = None
-                
-        except Exception as e:
-            print(f"Error loading data for {clean_model_name}: {e}")
-            continue
-    
-    return model_results, model_stats
-
-
 def plot_roc_curve(df: pd.DataFrame, out_dir: Path):
     if not df.probability.nunique():
         return
