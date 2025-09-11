@@ -19,8 +19,9 @@ DATASET_REPO = "EleutherAI/rpj-v2-sample"
 DATASET_NAME = "default"
 DATASET_COLUMN = "raw_content"
 MAX_LATENTS = 400  # Main configuration parameter
+DIR_NAME = "Qwen Explainer"
 THINKING_MODE = False  # Set to True to enable thinking mode
-USE_SEPARATE_SCORER = False
+USE_SEPARATE_SCORER = True
 
 # Explainer models to test
 EXPLAINER_MODELS = [
@@ -29,12 +30,12 @@ EXPLAINER_MODELS = [
     # "RedHatAI/gemma-3-12b-it-quantized.w4a16",
     # "RedHatAI/gemma-3-27b-it-quantized.w4a16",
     # "RedHatAI/Qwen3-14B-quantized.w4a16",
-    # "RedHatAI/Qwen3-32B-quantized.w4a16",
+    "RedHatAI/Qwen3-32B-quantized.w4a16",
     # "RedHatAI/Llama-3.3-70B-Instruct-quantized.w4a16",
+    # "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4",
     # "RedHatAI/Llama-4-Scout-17B-16E-Instruct-quantized.w4a16",
     # "Transluce/llama_8b_explainer"
-    "openai/gpt-oss-20b",
-    "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4"
+    # "openai/gpt-oss-20b",
 ]
 
 def get_model_name(model_path: str) -> str:
@@ -57,8 +58,8 @@ def get_experiment_dir(explainer_model: str) -> Path:
     if THINKING_MODE:
         components.append("thinking")
     experiment_name = "_".join(components)
-    # Store in results/pythiaST/{MAX_LATENTS}latents/{experiment_name}
-    return get_base_dir() / f"{MAX_LATENTS}latents" / experiment_name
+
+    return get_base_dir() / DIR_NAME / experiment_name
 
 def setup_shared_cache() -> None:
     """Set up shared activation cache."""
@@ -134,7 +135,7 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
 
     if USE_SEPARATE_SCORER:
         cmd.extend([
-            "--scorer_model", "RedHatAI/Qwen3-4B-quantized.w4a16"
+            "--scorer_model", "RedHatAI/Qwen3-32B-quantized.w4a16"
         ])
 
     # Add HF token if available
@@ -169,7 +170,7 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
 def main():
     """Main execution function."""
     # Get GPU ID from environment or use default
-    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "4,5,6,7")
+    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "2,3,4,5")
     gpu_ids = [id.strip() for id in gpu_id.split(',') if id.strip()]
     num_gpus = len(gpu_ids)
     

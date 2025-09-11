@@ -120,9 +120,10 @@ async def generate_explanations(
     tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
     latent_range: Tensor | None,
     scorer_model_name: str | None = None,
-) -> object | None:
+) -> tuple[object | None, float]:
     """Stage 1: Loads the explainer model, generates explanations for all latents,
     and saves them to disk before unloading the model.
+    Returns a tuple of (client_or_none, explanation_time_seconds).
     """
     print("--- Starting Stage 1: Explanation Generation ---")
     explanations_path.mkdir(parents=True, exist_ok=True)
@@ -143,7 +144,7 @@ async def generate_explanations(
 
     if run_cfg.explainer == "none":
         print("Explainer set to 'none' - skipping explanation generation stage.")
-        return None
+        return None, 0.0
 
     # Initialize explainer LLM client
     if run_cfg.explainer_provider == "offline":
@@ -180,7 +181,14 @@ async def generate_explanations(
     explainer_pipe = Pipe(process_wrapper(explainer, postprocess=explainer_postprocess))
 
     pipeline = Pipeline(dataset, explainer_pipe, progress_description="Generating explanations")
+    
+    # Time the pipeline execution
+    explainer_start_time = time.time()
     await pipeline.run(run_cfg.pipeline_num_proc)
+    explainer_end_time = time.time()
+
+    # Calculate explanation time
+    explanation_time = explainer_end_time - explainer_start_time
 
     # Save explainer stats
     stats_path = explanations_path.parent / "explainer_stats.json"
@@ -193,7 +201,7 @@ async def generate_explanations(
     # recompilation. Otherwise unload the client.
     if scorer_model_name is not None and scorer_model_name == run_cfg.explainer_model:
         print("Explainer and scorer model identical — keeping model loaded to avoid recompilation.")
-        return llm_client
+        return llm_client, explanation_time
 
     # Unload the model
     close_fn = getattr(llm_client, "close", None)
@@ -209,7 +217,7 @@ async def generate_explanations(
     gc.collect()
     torch.cuda.empty_cache()
     print("--- Finished Stage 1: Explainer model unloaded. ---")
-    return None
+    return None, explanation_time
 
 
 async def run_scoring(
@@ -221,9 +229,10 @@ async def run_scoring(
     tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
     latent_range: Tensor | None,
     existing_llm_client: object | None = None,
-) -> None:
+) -> float:
     """Stage 2: Loads the scorer model, reads explanations from disk, runs all scorers,
     and saves the scores before unloading the model.
+    Returns the scoring time in seconds.
     """
     print("--- Starting Stage 2: Scoring ---")
 
@@ -340,14 +349,8 @@ async def run_scoring(
     await pipeline.run(run_cfg.pipeline_num_proc)
     pipeline_end_time = time.time()
     
-    # Save timing data to JSON file
-    timing_data = {
-        "scoring_time_seconds": pipeline_end_time - pipeline_start_time,
-        "scorers_used": run_cfg.scorers
-    }
-    timing_path = scores_path.parent / "scoring_timing.json"
-    with open(timing_path, "wb") as f:
-        f.write(orjson.dumps(timing_data, option=orjson.OPT_INDENT_2))
+    # Calculate scoring time
+    scoring_time = pipeline_end_time - pipeline_start_time
 
     # Unload scorer model
     close_fn = getattr(scorer_llm_client, "close", None)
@@ -361,6 +364,7 @@ async def run_scoring(
     gc.collect()
     torch.cuda.empty_cache()
     print("--- Finished Stage 2: Scorer model unloaded. ---")
+    return scoring_time
 
 
 async def process_cache(
@@ -574,15 +578,6 @@ async def process_cache(
     pipeline_start_time = time.time()
     await pipeline.run(run_cfg.pipeline_num_proc)
     pipeline_end_time = time.time()
-    
-    # Save timing data to JSON file
-    timing_data = {
-        "scoring_time_seconds": pipeline_end_time - pipeline_start_time,
-        "scorers_used": run_cfg.scorers
-    }
-    timing_path = explanations_path.parent / "scoring_timing.json"
-    with open(timing_path, "wb") as f:
-        f.write(orjson.dumps(timing_data, option=orjson.OPT_INDENT_2))
 
     if not run_cfg.explainer == "none":
         if 'explainer' in locals():
@@ -761,6 +756,11 @@ async def run(
     # Determine scorer model name once (fall back to explainer model)
     scorer_model_name = run_cfg.scorer_model if getattr(run_cfg, "scorer_model", None) else run_cfg.explainer_model
 
+    # Initialize timing tracking
+    explanation_time = 0.0
+    scoring_time = 0.0
+    total_start_time = time.time()
+
     nrh = assert_type(
         list,
         non_redundant_hookpoints(
@@ -770,7 +770,7 @@ async def run(
     existing_llm_client = None
     if nrh:
         # Stage 1: Generate explanations and possibly return a live client to reuse
-        existing_llm_client = await generate_explanations(
+        existing_llm_client, explanation_time = await generate_explanations(
             run_cfg,
             latents_path,
             explanations_path,
@@ -788,7 +788,7 @@ async def run(
     )
     if nrh:
         # Stage 2: Run scoring using explanations on disk (may reuse a live client)
-        await run_scoring(
+        scoring_time = await run_scoring(
             run_cfg,
             latents_path,
             explanations_path,
@@ -798,6 +798,21 @@ async def run(
             latent_range,
             existing_llm_client=existing_llm_client,
         )
+
+    # Calculate total time and save comprehensive timing data
+    total_end_time = time.time()
+    total_time = total_end_time - total_start_time
+
+    # Save comprehensive timing data to JSON file
+    timing_data = {
+        "explanation_time_seconds": explanation_time,
+        "scoring_time_seconds": scoring_time,
+        "total_time_seconds": total_time,
+        "scorers_used": run_cfg.scorers
+    }
+    timing_path = base_path / "timing.json"
+    with open(timing_path, "wb") as f:
+        f.write(orjson.dumps(timing_data, option=orjson.OPT_INDENT_2))
 
     if run_cfg.verbose:
         log_results(
