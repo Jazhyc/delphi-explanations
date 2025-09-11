@@ -235,6 +235,7 @@ def constructor(
     tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
     all_data: Optional[dict[int, ActivationData]] = None,
     seed: int = 42,
+    generate_non_activating: bool = True,
 ) -> LatentRecord | None:
     cache_ctx_len = tokens.shape[1]
     example_ctx_len = constructor_cfg.example_ctx_len
@@ -292,43 +293,49 @@ def constructor(
         # Not enough examples to explain the latent
         return None
 
-    if source_non_activating == "random":
-        # Add random non-activating examples to the record in place
-        non_activating_examples = random_non_activating_windows(
-            available_indices=non_active_indices,
-            reshaped_tokens=reshaped_tokens,
-            n_not_active=n_not_active,
-            seed=seed,
-            tokenizer=tokenizer,
-        )
-    elif source_non_activating in ["co-occurrence", "decoder_similarity", "encoder_similarity"]:
-        assert all_data is not None, "All data is required for neighbour constructor"
-        non_activating_examples = neighbour_non_activation_windows(
-            record,
-            not_active_mask=mask,
-            tokens=tokens,
-            all_data=all_data,
-            ctx_len=example_ctx_len,
-            n_not_active=n_not_active,
-            seed=seed,
-            tokenizer=tokenizer,
-        )
-    elif source_non_activating == "faiss":
-        non_activating_examples = faiss_non_activation_windows(
-            available_indices=non_active_indices,
-            record=record,
-            tokens=tokens,
-            ctx_len=example_ctx_len,
-            tokenizer=tokenizer,
-            n_not_active=n_not_active,
-            embedding_model=constructor_cfg.faiss_embedding_model,
-            seed=seed,
-            cache_enabled=constructor_cfg.faiss_embedding_cache_enabled,
-            cache_dir=constructor_cfg.faiss_embedding_cache_dir,
-        )
+    # Generate non-activating examples only if needed
+    if generate_non_activating:
+        if source_non_activating == "random":
+            # Add random non-activating examples to the record in place
+            non_activating_examples = random_non_activating_windows(
+                available_indices=non_active_indices,
+                reshaped_tokens=reshaped_tokens,
+                n_not_active=n_not_active,
+                seed=seed,
+                tokenizer=tokenizer,
+            )
+        elif source_non_activating in ["co-occurrence", "decoder_similarity", "encoder_similarity"]:
+            assert all_data is not None and all_data, "All data is required for neighbour constructor"
+            non_activating_examples = neighbour_non_activation_windows(
+                record,
+                not_active_mask=mask,
+                tokens=tokens,
+                all_data=all_data,
+                ctx_len=example_ctx_len,
+                n_not_active=n_not_active,
+                seed=seed,
+                tokenizer=tokenizer,
+            )
+        elif source_non_activating == "faiss":
+            non_activating_examples = faiss_non_activation_windows(
+                available_indices=non_active_indices,
+                record=record,
+                tokens=tokens,
+                ctx_len=example_ctx_len,
+                tokenizer=tokenizer,
+                n_not_active=n_not_active,
+                embedding_model=constructor_cfg.faiss_embedding_model,
+                seed=seed,
+                cache_enabled=constructor_cfg.faiss_embedding_cache_enabled,
+                cache_dir=constructor_cfg.faiss_embedding_cache_dir,
+            )
+        else:
+            raise ValueError(f"Invalid non-activating source: {source_non_activating}")
+        record.not_active = non_activating_examples
     else:
-        raise ValueError(f"Invalid non-activating source: {source_non_activating}")
-    record.not_active = non_activating_examples
+        # Set empty list when not generating non-activating examples
+        record.not_active = []
+    
     return record
 
 

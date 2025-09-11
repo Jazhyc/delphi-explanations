@@ -142,6 +142,11 @@ async def generate_explanations(
         modules=hookpoints,
         latents=latent_dict,
         tokenizer=tokenizer,
+        load_neighbours=(
+            run_cfg.use_contrastive_explainer 
+            and run_cfg.constructor_cfg.non_activating_source in ["co-occurrence", "decoder_similarity", "encoder_similarity"]
+        ),
+        generate_non_activating=run_cfg.use_contrastive_explainer,
     )
 
     if run_cfg.explainer == "none":
@@ -227,6 +232,7 @@ async def run_scoring(
     latents_path: Path,
     explanations_path: Path,
     scores_path: Path,
+    neighbours_path: Path,
     hookpoints: list[str],
     tokenizer: PreTrainedTokenizer | PreTrainedTokenizerFast,
     latent_range: Tensor | None,
@@ -250,6 +256,12 @@ async def run_scoring(
         modules=hookpoints,
         latents=latent_dict,
         tokenizer=tokenizer,
+        neighbours_path=neighbours_path if neighbours_path.exists() else None,
+        load_neighbours=(
+            run_cfg.use_contrastive_scorer 
+            and run_cfg.constructor_cfg.non_activating_source in ["co-occurrence", "decoder_similarity", "encoder_similarity"]
+        ),
+        generate_non_activating=run_cfg.use_contrastive_scorer,
     )
 
     # Determine scorer model name (fallback to explainer model)
@@ -402,6 +414,11 @@ async def process_cache(
         modules=hookpoints,
         latents=latent_dict,
         tokenizer=tokenizer,
+        load_neighbours=(
+            (run_cfg.use_contrastive_explainer or run_cfg.use_contrastive_scorer)
+            and run_cfg.constructor_cfg.non_activating_source in ["co-occurrence", "decoder_similarity", "encoder_similarity"]
+        ),
+        generate_non_activating=(run_cfg.use_contrastive_explainer or run_cfg.use_contrastive_scorer),
     )
     
     def create_llm_client(model_name: str):
@@ -687,6 +704,34 @@ def non_redundant_hookpoints(
     return non_redundant_hookpoints
 
 
+def non_redundant_neighbour_hookpoints(
+    hookpoints: list[str],
+    neighbours_path: Path,
+    neighbour_type: str,
+    overwrite: bool,
+) -> list[str]:
+    """
+    Returns a list of hookpoints that don't have neighbour files computed yet.
+    Neighbour files are saved as {hookpoint}-{neighbour_type}.json
+    """
+    if overwrite:
+        print("Overwriting neighbours from", neighbours_path)
+        return hookpoints
+    
+    existing_files = [f.name for f in neighbours_path.glob("*.json")]
+    non_redundant_hookpoints = []
+    
+    for hookpoint in hookpoints:
+        expected_filename = f"{hookpoint}-{neighbour_type}.json"
+        if expected_filename not in existing_files:
+            non_redundant_hookpoints.append(hookpoint)
+    
+    if not non_redundant_hookpoints:
+        print(f"Neighbour files found in {neighbours_path}, skipping...")
+    
+    return non_redundant_hookpoints
+
+
 async def run(
     run_cfg: RunConfig,
 ):
@@ -745,11 +790,11 @@ async def run(
     torch.cuda.empty_cache()
     
     if run_cfg.constructor_cfg.non_activating_source in ["co-occurrence", "decoder_similarity", "encoder_similarity"]:
-        nrh = assert_type(
-            list,
-            non_redundant_hookpoints(
-                hookpoints, neighbours_path, "neighbours" in run_cfg.overwrite
-            ),
+        nrh = non_redundant_neighbour_hookpoints(
+            hookpoints, 
+            neighbours_path, 
+            run_cfg.constructor_cfg.non_activating_source,
+            "neighbours" in run_cfg.overwrite
         )
         if nrh:
             create_neighbours(
@@ -801,6 +846,7 @@ async def run(
             latents_path,
             explanations_path,
             scores_path,
+            neighbours_path,
             nrh,
             tokenizer,
             latent_range,

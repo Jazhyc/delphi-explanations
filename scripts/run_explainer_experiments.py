@@ -25,11 +25,10 @@ USE_SEPARATE_SCORER = False
 
 # Non-activating source configurations to test
 NON_ACTIVATING_SOURCES = [
-    "random",
-    "faiss", 
-    "co-occurrence",
-    "decoder_similarity",
-    # "encoder_similarity",  # Uncomment if needed
+    # "random", 
+    # "co-occurrence",
+    # "decoder_similarity",
+    "faiss",
 ]
 
 # Contrastive experiment configurations
@@ -55,8 +54,8 @@ EXPLAINER_MODELS = [
     # "RedHatAI/Qwen3-4B-quantized.w4a16",
     # "RedHatAI/gemma-3-12b-it-quantized.w4a16",
     # "RedHatAI/gemma-3-27b-it-quantized.w4a16",
-    # "RedHatAI/Qwen3-14B-quantized.w4a16",
-    "RedHatAI/Qwen3-32B-quantized.w4a16",
+    "RedHatAI/Qwen3-14B-quantized.w4a16",
+    # "RedHatAI/Qwen3-32B-quantized.w4a16",
     # "RedHatAI/Llama-3.3-70B-Instruct-quantized.w4a16",
     # "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4",
     # "RedHatAI/Llama-4-Scout-17B-16E-Instruct-quantized.w4a16",
@@ -222,7 +221,7 @@ def run_experiment(explainer_model: str, non_activating_source: str,
 def main():
     """Main execution function."""
     # Get GPU ID from environment or use default
-    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "7")
+    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "6, 7")
     gpu_ids = [id.strip() for id in gpu_id.split(',') if id.strip()]
     num_gpus = len(gpu_ids)
     

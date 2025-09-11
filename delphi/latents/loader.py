@@ -141,6 +141,8 @@ class LatentDataset:
         modules: Optional[list[str]] = None,
         latents: Optional[dict[str, torch.Tensor]] = None,
         neighbours_path: Optional[os.PathLike] = None,
+        load_neighbours: bool = True,
+        generate_non_activating: bool = True,
     ):
         """
         Initialize a LatentDataset.
@@ -153,9 +155,14 @@ class LatentDataset:
             tokenizer: Tokenizer used to tokenize the data.
             modules: list of module names to include.
             latents: Dictionary of latents per module.
+            load_neighbours: Whether to load neighbour data. If False, neighbours
+            won't be loaded even if the non_activating_source requires them.
+            generate_non_activating: Whether to generate non-activating examples.
+            If False, expensive operations like FAISS will be skipped.
         """
         self.constructor_cfg = constructor_cfg
         self.sampler_cfg = sampler_cfg
+        self.generate_non_activating = generate_non_activating
         self.buffers: list[TensorBuffer] = []
         self.all_data: dict[str, dict[int, ActivationData] | None] = {}
         self.tokens = None
@@ -192,7 +199,8 @@ class LatentDataset:
             self.tokenizer = tokenizer
         self.cache_config = cache_config
 
-        if self.constructor_cfg.non_activating_source in ["co-occurrence", "decoder_similarity", "encoder_similarity"]:
+        if (self.constructor_cfg.non_activating_source in ["co-occurrence", "decoder_similarity", "encoder_similarity"] 
+            and load_neighbours):
             # path is always going to end with /latents
             if self.neighbours_path is None:
                 neighbours_path = Path(raw_dir).parent / "neighbours"
@@ -201,10 +209,16 @@ class LatentDataset:
             self.neighbours = self.load_neighbours(
                 neighbours_path, self.constructor_cfg.non_activating_source
             )
+        else:
+            self.neighbours = None
+
+        # Load all_data if any neighbour-based non-activating source is used
+        # This is required for the constructor function even if pre-computed neighbours aren't loaded
+        if self.constructor_cfg.non_activating_source in ["co-occurrence", "decoder_similarity", "encoder_similarity"]:
             # TODO: is it possible to do this without loading all data?
             self.all_data = self._load_all_data(raw_dir, self.modules)
         else:
-            self.neighbours = None
+            self.all_data = {}
 
         self.load_tokens()
 
@@ -452,7 +466,8 @@ class LatentDataset:
             constructor_cfg=self.constructor_cfg,
             tokens=self.tokens,
             tokenizer=self.tokenizer,
-            all_data=self.all_data[latent_data.module],
+            all_data=self.all_data.get(latent_data.module, None),
+            generate_non_activating=self.generate_non_activating,
         )
         if record is None:
             return None
