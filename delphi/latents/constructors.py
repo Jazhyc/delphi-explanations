@@ -301,7 +301,7 @@ def constructor(
             seed=seed,
             tokenizer=tokenizer,
         )
-    elif source_non_activating == "neighbours":
+    elif source_non_activating in ["co-occurrence", "decoder_similarity", "encoder_similarity"]:
         assert all_data is not None, "All data is required for neighbour constructor"
         non_activating_examples = neighbour_non_activation_windows(
             record,
@@ -313,7 +313,7 @@ def constructor(
             seed=seed,
             tokenizer=tokenizer,
         )
-    elif source_non_activating == "FAISS":
+    elif source_non_activating == "faiss":
         non_activating_examples = faiss_non_activation_windows(
             available_indices=non_active_indices,
             record=record,

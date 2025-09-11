@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Script to run experiments with different explainer models
+Script to run experiments with different explainer models and non-activating sources
 """
 
 import os
@@ -19,9 +19,35 @@ DATASET_REPO = "EleutherAI/rpj-v2-sample"
 DATASET_NAME = "default"
 DATASET_COLUMN = "raw_content"
 MAX_LATENTS = 400  # Main configuration parameter
-DIR_NAME = "Qwen Explainer"
+DIR_NAME = "Contrastive Experiments"
 THINKING_MODE = False  # Set to True to enable thinking mode
-USE_SEPARATE_SCORER = True
+USE_SEPARATE_SCORER = False
+
+# Non-activating source configurations to test
+NON_ACTIVATING_SOURCES = [
+    "random",
+    "faiss", 
+    "co-occurrence",
+    "decoder_similarity",
+    # "encoder_similarity",  # Uncomment if needed
+]
+
+# Contrastive experiment configurations
+CONTRASTIVE_CONFIGS = [
+    # Format: (use_contrastive_explainer, use_contrastive_scorer, description)
+    # (False, False, "baseline"),  # Standard behavior
+    # (True, False, "contrastive_explainer_only"),  # Use contrastive explainer only
+    (False, True, "contrastive_scorer_only"),  # Use contrastive scorer only  
+    # (True, True, "both_contrastive"),  # Use both contrastive explainer and scorer
+]
+
+# Train type configurations to test
+TRAIN_TYPES = [
+    "quantiles",
+    # "top", 
+    # "random",
+    # "mix",  # Uncomment if needed
+]
 
 # Explainer models to test
 EXPLAINER_MODELS = [
@@ -50,15 +76,25 @@ def get_cache_dir() -> Path:
     """Get the shared cache directory."""
     return get_base_dir() / "cache"
 
-def get_experiment_dir(explainer_model: str) -> Path:
+def get_experiment_dir(explainer_model: str, non_activating_source: str, 
+                      contrastive_config: Tuple[bool, bool, str], train_type: str) -> Path:
     """Get the experiment directory for a specific configuration."""
     model_name = get_model_name(explainer_model)
+    use_contrastive_explainer, use_contrastive_scorer, contrastive_desc = contrastive_config
+    
     # Build experiment name components
-    components = [SPARSE_MODEL_NAME, model_name]
+    components = [
+        SPARSE_MODEL_NAME, 
+        model_name,
+        non_activating_source,
+        contrastive_desc,
+        train_type
+    ]
+    
     if THINKING_MODE:
         components.append("thinking")
+    
     experiment_name = "_".join(components)
-
     return get_base_dir() / DIR_NAME / experiment_name
 
 def setup_shared_cache() -> None:
@@ -79,12 +115,20 @@ def setup_shared_cache() -> None:
         print(f"Cache directory does not exist at {cache_path} - will be created during first run")
     print()
 
-def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
-    """Run a single experiment with the specified explainer model."""
-    experiment_dir = get_experiment_dir(explainer_model)
+def run_experiment(explainer_model: str, non_activating_source: str, 
+                  contrastive_config: Tuple[bool, bool, str], train_type: str, 
+                  gpu_id: str = "0") -> float:
+    """Run a single experiment with the specified configuration."""
+    experiment_dir = get_experiment_dir(explainer_model, non_activating_source, contrastive_config, train_type)
     experiment_name = experiment_dir.name
+    use_contrastive_explainer, use_contrastive_scorer, contrastive_desc = contrastive_config
     
-    print(f"=== Running experiment with {explainer_model} ===")
+    print(f"=== Running experiment ===")
+    print(f"Explainer model: {explainer_model}")
+    print(f"Non-activating source: {non_activating_source}")
+    print(f"Contrastive explainer: {use_contrastive_explainer}")
+    print(f"Contrastive scorer: {use_contrastive_scorer}")
+    print(f"Train type: {train_type}")
     print(f"Experiment name: {experiment_name}")
     print(f"Experiment directory: {experiment_dir}")
     print(f"Start time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
@@ -119,11 +163,19 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
         "--n_non_activating", "100",
         "--n_examples_train", "40",
         "--n_examples_test", "100",
-        "--train_type", "quantiles",
+        "--train_type", train_type,
         "--test_type", "quantiles",
         "--filter_bos",
         "--max_num_seqs", "64", # Needed for larger models to not OOM
+        # New configuration options
+        "--non_activating_source", non_activating_source,
     ]
+    
+    # Add contrastive configuration flags
+    if use_contrastive_explainer:
+        cmd.append("--use_contrastive_explainer")
+    if use_contrastive_scorer:
+        cmd.append("--use_contrastive_scorer")
     
     # Add thinking mode specific parameters
     if THINKING_MODE:
@@ -170,17 +222,23 @@ def run_experiment(explainer_model: str, gpu_id: str = "0") -> float:
 def main():
     """Main execution function."""
     # Get GPU ID from environment or use default
-    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "2,3,4,5")
+    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "7")
     gpu_ids = [id.strip() for id in gpu_id.split(',') if id.strip()]
     num_gpus = len(gpu_ids)
     
-    print("=== Delphi Explainer Model Comparison Experiments ===")
+    print("=== Delphi Contrastive Explainer Experiments ===")
     print(f"Base model: {BASE_MODEL}")
     print(f"Sparse model: {SPARSE_MODEL}")
     print(f"Max latents: {MAX_LATENTS}")
     print(f"Thinking mode: {THINKING_MODE}")
     print(f"Using GPUs: {gpu_ids} (total: {num_gpus})")
     print(f"Cache directory: {get_cache_dir()}")
+    print()
+    print("Configuration matrix:")
+    print(f"  Non-activating sources: {NON_ACTIVATING_SOURCES}")
+    print(f"  Contrastive configs: {[desc for _, _, desc in CONTRASTIVE_CONFIGS]}")
+    print(f"  Train types: {TRAIN_TYPES}")
+    print(f"  Explainer models: {len(EXPLAINER_MODELS)} models")
     print()
     
     # Check if we're in the right directory
@@ -192,16 +250,48 @@ def main():
     setup_shared_cache()
     
     # Track results
-    results: List[Tuple[str, float]] = []
+    results: List[Tuple[str, str, str, str, float]] = []
     
+    # Calculate total number of experiments
+    total_experiments = (len(EXPLAINER_MODELS) * len(NON_ACTIVATING_SOURCES) * 
+                        len(CONTRASTIVE_CONFIGS) * len(TRAIN_TYPES))
+    
+    print(f"Total experiments to run: {total_experiments}")
     print(f"Starting experiments at {time.strftime('%Y-%m-%d %H:%M:%S')}")
     print()
     
-    # Run experiments for each explainer model
-    for i, explainer_model in enumerate(EXPLAINER_MODELS, 1):
-        print(f"Progress: {i}/{len(EXPLAINER_MODELS)}")
-        duration = run_experiment(explainer_model, gpu_id)
-        results.append((explainer_model, duration))
+    experiment_count = 0
+    
+    # Run experiments for each configuration combination
+    for explainer_model in EXPLAINER_MODELS:
+        for non_activating_source in NON_ACTIVATING_SOURCES:
+            for contrastive_config in CONTRASTIVE_CONFIGS:
+                use_contrastive_explainer, use_contrastive_scorer, contrastive_desc = contrastive_config
+                
+                # Skip certain combinations that don't make sense
+                if non_activating_source == "random" and (use_contrastive_explainer or use_contrastive_scorer):
+                    print(f"Skipping {non_activating_source} + {contrastive_desc} (random source with contrastive doesn't make sense)")
+                    continue
+                
+                for train_type in TRAIN_TYPES:
+                    experiment_count += 1
+                    print(f"Progress: {experiment_count}/{total_experiments}")
+                    
+                    duration = run_experiment(
+                        explainer_model, 
+                        non_activating_source, 
+                        contrastive_config, 
+                        train_type, 
+                        gpu_id
+                    )
+                    
+                    results.append((
+                        explainer_model, 
+                        non_activating_source, 
+                        contrastive_desc, 
+                        train_type, 
+                        duration
+                    ))
     
     # Print summary
     print("=== EXPERIMENT SUMMARY ===")
@@ -211,14 +301,14 @@ def main():
     print("---------------")
     
     total_time = 0
-    for model, duration in results:
+    for model, source, contrastive, train_type, duration in results:
         if duration > 0:
             minutes = int(duration // 60)
             seconds = int(duration % 60)
-            print(f"{model}: {duration:.0f}s ({minutes}m {seconds}s)")
+            print(f"{model} | {source} | {contrastive} | {train_type}: {duration:.0f}s ({minutes}m {seconds}s)")
             total_time += duration
         else:
-            print(f"{model}: FAILED")
+            print(f"{model} | {source} | {contrastive} | {train_type}: FAILED")
     
     if total_time > 0:
         total_minutes = int(total_time // 60)
@@ -229,8 +319,17 @@ def main():
     print()
     print("Results saved in:")
     for explainer_model in EXPLAINER_MODELS:
-        experiment_dir = get_experiment_dir(explainer_model)
-        print(f"  - {experiment_dir}")
+        for non_activating_source in NON_ACTIVATING_SOURCES:
+            for contrastive_config in CONTRASTIVE_CONFIGS:
+                use_contrastive_explainer, use_contrastive_scorer, contrastive_desc = contrastive_config
+                
+                # Skip combinations that don't make sense
+                if non_activating_source == "random" and (use_contrastive_explainer or use_contrastive_scorer):
+                    continue
+                    
+                for train_type in TRAIN_TYPES:
+                    experiment_dir = get_experiment_dir(explainer_model, non_activating_source, contrastive_config, train_type)
+                    print(f"  - {experiment_dir}")
     
     print()
     print(f"Shared cache location: {get_cache_dir()}")

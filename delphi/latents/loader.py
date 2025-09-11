@@ -192,14 +192,14 @@ class LatentDataset:
             self.tokenizer = tokenizer
         self.cache_config = cache_config
 
-        if self.constructor_cfg.non_activating_source == "neighbours":
+        if self.constructor_cfg.non_activating_source in ["co-occurrence", "decoder_similarity", "encoder_similarity"]:
             # path is always going to end with /latents
             if self.neighbours_path is None:
                 neighbours_path = Path(raw_dir).parent / "neighbours"
             else:
                 neighbours_path = Path(self.neighbours_path)
             self.neighbours = self.load_neighbours(
-                neighbours_path, self.constructor_cfg.neighbours_type
+                neighbours_path, self.constructor_cfg.non_activating_source
             )
             # TODO: is it possible to do this without loading all data?
             self.all_data = self._load_all_data(raw_dir, self.modules)
@@ -230,11 +230,11 @@ class LatentDataset:
             )
         return self.tokens
 
-    def load_neighbours(self, neighbours_path: Path, neighbours_type: str):
+    def load_neighbours(self, neighbours_path: Path, non_activating_source: str):
         neighbours = {}
         for hookpoint in self.modules:
             with open(
-                neighbours_path / f"{hookpoint}-{neighbours_type}.json", "r"
+                neighbours_path / f"{hookpoint}-{non_activating_source}.json", "r"
             ) as f:
                 neighbours[hookpoint] = json.load(f)
         return neighbours

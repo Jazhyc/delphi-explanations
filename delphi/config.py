@@ -58,17 +58,19 @@ class ConstructorConfig(Serializable):
     Otherwise, windows will be used, and the activating example can be anywhere
     window."""
 
-    non_activating_source: Literal["random", "neighbours", "FAISS"] = "random"
-    """Source of non-activating examples. Random uses non-activating contexts
-    sampled from any non activating window. Neighbours uses actvating contexts
-    from pre-computed latent neighbours. FAISS uses semantic similarity search
-    to find hard negatives that are semantically similar to activating examples
-    but don't activate the latent."""
-
-    neighbours_type: Literal[
-        "co-occurrence", "decoder_similarity", "encoder_similarity"
-    ] = "co-occurrence"
-    """Type of neighbours to use. Only used if non_activating_source is 'neighbours'."""
+    non_activating_source: Literal[
+        "random",
+        "faiss",
+        "co-occurrence",
+        "decoder_similarity",
+        "encoder_similarity",
+    ] = "random"
+    """Source of non-activating examples.
+    - 'random': Randomly sampled contexts that don't activate the latent.
+    - 'faiss': Semantically similar contexts that don't activate the latent (hard negatives).
+    - 'co-occurrence', 'decoder_similarity', 'encoder_similarity': Activating contexts
+      from pre-computed latent neighbours.
+    """
 
 
 @dataclass
@@ -153,6 +155,34 @@ class RunConfig(Serializable):
     """Explainer to use for generating explanations. Options are 'default' for
     the default single token explainer, and 'none' for no explanation generation."""
 
+    use_contrastive_explainer: bool = field(
+        default=False,
+    )
+    """Whether to use the ContrastiveExplainer, which shows both activating and
+    non-activating examples to the explainer LLM. Requires a non-random
+    `non_activating_source` to be effective."""
+
+    use_contrastive_scorer: bool = field(
+        default=False,
+    )
+    """Whether to pass non-activating examples to the scorers for evaluation.
+    This allows scoring models on their ability to distinguish activating examples
+    from hard negatives or neighbours."""
+
+    use_contrastive_explainer: bool = field(
+        default=False,
+    )
+    """Whether to use the ContrastiveExplainer, which shows both activating and
+    non-activating examples to the explainer LLM. Requires a non-random
+    `non_activating_source` to be effective."""
+
+    use_contrastive_scorer: bool = field(
+        default=False,
+    )
+    """Whether to pass non-activating examples to the scorers for evaluation.
+    This allows scoring models on their ability to distinguish activating examples
+    from hard negatives or neighbours."""
+
     scorers: list[str] = list_field(
         choices=[
             "fuzz",
@@ -211,7 +241,7 @@ class RunConfig(Serializable):
     """Whether to enable VLLM expert parallelism for the MOE explainer model."""
     
     # Default is None
-    max_num_seqs: int = field(
+    max_num_seqs: int | None = field(
         default=None,
     )
     """Maximum number of sequences for VLLM to process in an iteration. If None, use VLLMs default value."""

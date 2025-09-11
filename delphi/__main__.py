@@ -80,35 +80,37 @@ def create_neighbours(
     neighbours_path.mkdir(parents=True, exist_ok=True)
 
     constructor_cfg = run_cfg.constructor_cfg
+    neighbour_type = constructor_cfg.non_activating_source
+
     saes = (
         load_sparse_coders(run_cfg, device="cpu")
-        if constructor_cfg.neighbours_type != "co-occurrence"
+        if neighbour_type != "co-occurrence"
         else {}
     )
 
     for hookpoint in hookpoints:
 
-        if constructor_cfg.neighbours_type == "co-occurrence":
+        if neighbour_type == "co-occurrence":
             neighbour_calculator = NeighbourCalculator(
                 cache_dir=latents_path / hookpoint, number_of_neighbours=250
             )
 
-        elif constructor_cfg.neighbours_type == "decoder_similarity":
+        elif neighbour_type == "decoder_similarity":
 
             neighbour_calculator = NeighbourCalculator(
                 autoencoder=saes[hookpoint].to("cuda"), number_of_neighbours=250
             )
 
-        elif constructor_cfg.neighbours_type == "encoder_similarity":
+        elif neighbour_type == "encoder_similarity":
             neighbour_calculator = NeighbourCalculator(
                 autoencoder=saes[hookpoint].to("cuda"), number_of_neighbours=250
             )
         else:
             raise ValueError(
-                f"Neighbour type {constructor_cfg.neighbours_type} not supported"
+                f"Neighbour type {neighbour_type} not supported for neighbour creation."
             )
 
-        neighbour_calculator.populate_neighbour_cache(constructor_cfg.neighbours_type)
+        neighbour_calculator.populate_neighbour_cache(neighbour_type)
         neighbour_calculator.save_neighbour_cache(f"{neighbours_path}/{hookpoint}")
 
 
@@ -173,7 +175,7 @@ async def generate_explanations(
             f.write(orjson.dumps(result.explanation))
         return result
 
-    if run_cfg.constructor_cfg.non_activating_source == "FAISS":
+    if run_cfg.use_contrastive_explainer:
         explainer = ContrastiveExplainer(llm_client, threshold=0.3, verbose=run_cfg.verbose)
     else:
         explainer = DefaultExplainer(llm_client, threshold=0.3, verbose=run_cfg.verbose)
@@ -296,7 +298,10 @@ async def run_scoring(
             result = result[0]
         record = result.record
         record.explanation = result.explanation
-        record.extra_examples = record.not_active
+        if run_cfg.use_contrastive_scorer:
+            record.extra_examples = record.not_active
+        else:
+            record.extra_examples = []  # Ensure scorers get an empty list
         return record
 
     def scorer_postprocess(result, score_dir):
@@ -467,7 +472,7 @@ async def process_cache(
 
             return result
 
-        if run_cfg.constructor_cfg.non_activating_source == "FAISS":
+        if run_cfg.use_contrastive_explainer:
             explainer = ContrastiveExplainer(
                 llm_client,
                 threshold=0.3,
@@ -514,7 +519,10 @@ async def process_cache(
 
         record = result.record
         record.explanation = result.explanation
-        record.extra_examples = record.not_active
+        if run_cfg.use_contrastive_scorer:
+            record.extra_examples = record.not_active
+        else:
+            record.extra_examples = []  # Ensure scorers get an empty list
         return record
 
     # Saves the score to a file
@@ -736,7 +744,7 @@ async def run(
     gc.collect()
     torch.cuda.empty_cache()
     
-    if run_cfg.constructor_cfg.non_activating_source == "neighbours":
+    if run_cfg.constructor_cfg.non_activating_source in ["co-occurrence", "decoder_similarity", "encoder_similarity"]:
         nrh = assert_type(
             list,
             non_redundant_hookpoints(
