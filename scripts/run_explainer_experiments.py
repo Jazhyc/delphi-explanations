@@ -25,25 +25,25 @@ USE_SEPARATE_SCORER = False
 
 # Non-activating source configurations to test
 NON_ACTIVATING_SOURCES = [
-    # "random", 
+    "random", 
     # "co-occurrence",
     # "decoder_similarity",
-    "faiss",
+    # "faiss",
 ]
 
 # Contrastive experiment configurations
 CONTRASTIVE_CONFIGS = [
     # Format: (use_contrastive_explainer, use_contrastive_scorer, description)
-    # (False, False, "baseline"),  # Standard behavior
+    (False, False, "baseline"),  # Standard behavior
     # (True, False, "contrastive_explainer_only"),  # Use contrastive explainer only
-    (False, True, "contrastive_scorer_only"),  # Use contrastive scorer only  
+    # (False, True, "contrastive_scorer_only"),  # Use contrastive scorer only  
     # (True, True, "both_contrastive"),  # Use both contrastive explainer and scorer
 ]
 
 # Train type configurations to test
 TRAIN_TYPES = [
     "quantiles",
-    # "top", 
+    "top", 
     # "random",
     # "mix",  # Uncomment if needed
 ]
@@ -221,7 +221,7 @@ def run_experiment(explainer_model: str, non_activating_source: str,
 def main():
     """Main execution function."""
     # Get GPU ID from environment or use default
-    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "6, 7")
+    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "1")
     gpu_ids = [id.strip() for id in gpu_id.split(',') if id.strip()]
     num_gpus = len(gpu_ids)
     

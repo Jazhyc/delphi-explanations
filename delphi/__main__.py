@@ -146,7 +146,10 @@ async def generate_explanations(
             run_cfg.use_contrastive_explainer 
             and run_cfg.constructor_cfg.non_activating_source in ["co-occurrence", "decoder_similarity", "encoder_similarity"]
         ),
-        generate_non_activating=run_cfg.use_contrastive_explainer,
+        generate_non_activating=(
+            run_cfg.use_contrastive_explainer 
+            or scorers_need_non_activating_examples(run_cfg.scorers)
+        ),
     )
 
     if run_cfg.explainer == "none":
@@ -261,7 +264,10 @@ async def run_scoring(
             run_cfg.use_contrastive_scorer 
             and run_cfg.constructor_cfg.non_activating_source in ["co-occurrence", "decoder_similarity", "encoder_similarity"]
         ),
-        generate_non_activating=run_cfg.use_contrastive_scorer,
+        generate_non_activating=(
+            run_cfg.use_contrastive_scorer 
+            or scorers_need_non_activating_examples(run_cfg.scorers)
+        ),
     )
 
     # Determine scorer model name (fallback to explainer model)
@@ -418,7 +424,11 @@ async def process_cache(
             (run_cfg.use_contrastive_explainer or run_cfg.use_contrastive_scorer)
             and run_cfg.constructor_cfg.non_activating_source in ["co-occurrence", "decoder_similarity", "encoder_similarity"]
         ),
-        generate_non_activating=(run_cfg.use_contrastive_explainer or run_cfg.use_contrastive_scorer),
+        generate_non_activating=(
+            run_cfg.use_contrastive_explainer 
+            or run_cfg.use_contrastive_scorer 
+            or scorers_need_non_activating_examples(run_cfg.scorers)
+        ),
     )
     
     def create_llm_client(model_name: str):
@@ -702,6 +712,25 @@ def non_redundant_hookpoints(
     if not non_redundant_hookpoints:
         print(f"Files found in {results_path}, skipping...")
     return non_redundant_hookpoints
+
+
+def scorers_need_non_activating_examples(scorers: list[str]) -> bool:
+    """
+    Determine if any of the configured scorers require non-activating examples.
+    
+    Args:
+        scorers: List of scorer names
+        
+    Returns:
+        True if any scorer requires non-activating examples
+    """
+    # Scorers that always require non-activating examples
+    require_non_activating = {"fuzz"}
+    
+    # Scorers that can use non-activating examples if available
+    can_use_non_activating = {"detection", "simulation"}
+    
+    return any(scorer in require_non_activating for scorer in scorers)
 
 
 def non_redundant_neighbour_hookpoints(
