@@ -316,10 +316,7 @@ async def run_scoring(
             result = result[0]
         record = result.record
         record.explanation = result.explanation
-        if run_cfg.use_contrastive_scorer:
-            record.extra_examples = record.not_active
-        else:
-            record.extra_examples = []  # Ensure scorers get an empty list
+        record.extra_examples = record.not_active
         return record
 
     def scorer_postprocess(result, score_dir):
@@ -725,10 +722,10 @@ def scorers_need_non_activating_examples(scorers: list[str]) -> bool:
         True if any scorer requires non-activating examples
     """
     # Scorers that always require non-activating examples
-    require_non_activating = {"fuzz"}
+    require_non_activating = {"fuzz", "detection"}
     
     # Scorers that can use non-activating examples if available
-    can_use_non_activating = {"detection", "simulation"}
+    can_use_non_activating = {"simulation"}
     
     return any(scorer in require_non_activating for scorer in scorers)
 

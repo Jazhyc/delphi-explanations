@@ -43,7 +43,7 @@ CONTRASTIVE_CONFIGS = [
 # Train type configurations to test
 TRAIN_TYPES = [
     "quantiles",
-    "top", 
+    # "top", 
     # "random",
     # "mix",  # Uncomment if needed
 ]
@@ -221,7 +221,7 @@ def run_experiment(explainer_model: str, non_activating_source: str,
 def main():
     """Main execution function."""
     # Get GPU ID from environment or use default
-    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "1")
+    gpu_id = os.environ.get("CUDA_VISIBLE_DEVICES", "7")
     gpu_ids = [id.strip() for id in gpu_id.split(',') if id.strip()]
     num_gpus = len(gpu_ids)
     
