@@ -28,14 +28,14 @@ DATASET_COLUMN = "raw_content"
 # EXPERIMENT HYPERPARAMETERS
 # ============================================================================
 
-MAX_LATENTS = 100
+MAX_LATENTS = 500
 N_TOKENS = "10000000"
 CACHE_CTX_LEN = "256"
 EXAMPLE_CTX_LEN = "32"
 MIN_EXAMPLES = "200"
-N_NON_ACTIVATING = "100"
+N_NON_ACTIVATING = "350"
 N_EXAMPLES_TRAIN = "40"
-N_EXAMPLES_TEST = "100"
+N_EXAMPLES_TEST = "150"
 TEST_TYPE = "quantiles"
 MAX_NUM_SEQS = "64"  # Needed for larger models to not OOM
 SCORERS = ["fuzz", "detection"] # detection

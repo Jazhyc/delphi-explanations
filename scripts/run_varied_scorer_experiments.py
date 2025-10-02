@@ -23,7 +23,7 @@ from experiment_config import (
 # VARIED SCORER EXPERIMENT CONFIGURATION
 # ============================================================================
 
-DIR_NAME = "Varied Scorers"  # Directory for experiments with varied scorers
+DIR_NAME = "500 Latents Varied Scorers"  # Directory for experiments with varied scorers
 THINKING_MODE = False  # Set to True to enable thinking mode
 
 # Fixed explainer model for all experiments
@@ -45,15 +45,15 @@ USE_CONTRASTIVE_SCORER = False
 
 # Scorer models to test (iterate over these) - uncomment as needed
 SCORER_MODELS = [
-    # "RedHatAI/gemma-3-4b-it-quantized.w4a16",
-    # "RedHatAI/Qwen3-4B-quantized.w4a16",
-    # "RedHatAI/gemma-3-12b-it-quantized.w4a16",
-    # "RedHatAI/gemma-3-27b-it-quantized.w4a16",
-    # "RedHatAI/Qwen3-14B-quantized.w4a16",
+    "RedHatAI/gemma-3-4b-it-quantized.w4a16",
+    "RedHatAI/Qwen3-4B-quantized.w4a16",
+    "RedHatAI/gemma-3-12b-it-quantized.w4a16",
+    "RedHatAI/gemma-3-27b-it-quantized.w4a16",
+    "RedHatAI/Qwen3-14B-quantized.w4a16",
     "RedHatAI/Qwen3-32B-quantized.w4a16",
-    # "RedHatAI/Llama-3.3-70B-Instruct-quantized.w4a16",
-    # "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4",
-    # "RedHatAI/Llama-4-Scout-17B-16E-Instruct-quantized.w4a16",
+    "RedHatAI/Llama-3.3-70B-Instruct-quantized.w4a16",
+    "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4",
+    "RedHatAI/Llama-4-Scout-17B-16E-Instruct-quantized.w4a16",
 ]
 
 # ============================================================================
