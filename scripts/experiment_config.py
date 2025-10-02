@@ -38,7 +38,7 @@ N_EXAMPLES_TRAIN = "40"
 N_EXAMPLES_TEST = "100"
 TEST_TYPE = "quantiles"
 MAX_NUM_SEQS = "64"  # Needed for larger models to not OOM
-SCORERS = ["fuzz"] # detection
+SCORERS = ["fuzz", "detection"] # detection
 
 # ============================================================================
 # MODEL LISTS

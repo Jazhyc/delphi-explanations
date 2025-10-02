@@ -52,7 +52,6 @@ def create_scorer_preprocess():
             result = result[0]
         record = result.record
         record.explanation = result.explanation
-        # Always provide non-activating examples - scorers that don't need them will ignore them
         record.extra_examples = record.not_active
         return record
     return scorer_preprocess
