@@ -236,7 +236,7 @@ def constructor(
     all_data: Optional[dict[int, ActivationData]] = None,
     seed: int = 42,
     generate_non_activating: bool = True,
-) -> LatentRecord | None:
+)  -> LatentRecord | None:
     cache_ctx_len = tokens.shape[1]
     example_ctx_len = constructor_cfg.example_ctx_len
     source_non_activating = constructor_cfg.non_activating_source

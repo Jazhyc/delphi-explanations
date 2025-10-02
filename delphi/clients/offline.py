@@ -77,7 +77,7 @@ class Offline(Client):
             llm_kwargs["rope_scaling"] = rope_scaling
 
         self.client = LLM(**llm_kwargs)
-        self.sampling_params = SamplingParams(max_tokens=number_tokens_to_generate)
+        self.sampling_params = SamplingParams(max_tokens=number_tokens_to_generate, seed=42)
         self.tokenizer = AutoTokenizer.from_pretrained(model)
         self.batch_size = batch_size
         self.statistics = statistics

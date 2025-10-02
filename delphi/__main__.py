@@ -34,6 +34,53 @@ from delphi.sparse_coders import load_hooks_sparse_coders, load_sparse_coders
 from delphi.utils import assert_type, load_tokenized_data
 
 
+# ============================================================================
+# Shared Helper Functions for Scoring Pipeline
+# ============================================================================
+
+def create_scorer_preprocess():
+    """
+    Create a preprocessor function for scorers.
+    This function prepares LatentRecords for scoring by attaching explanations
+    and non-activating examples.
+    
+    Returns:
+        A function that preprocesses results for scoring.
+    """
+    def scorer_preprocess(result):
+        if isinstance(result, list):
+            result = result[0]
+        record = result.record
+        record.explanation = result.explanation
+        # Always provide non-activating examples - scorers that don't need them will ignore them
+        record.extra_examples = record.not_active
+        return record
+    return scorer_preprocess
+
+
+def create_scorer_postprocess(score_dir: Path):
+    """
+    Create a postprocessor function for scorers.
+    This function saves scoring results to disk.
+    
+    Args:
+        score_dir: Directory where score files should be saved.
+        
+    Returns:
+        A function that saves scorer results to files.
+    """
+    def scorer_postprocess(result, score_dir):
+        # Replace "/" with "--" to avoid directory separators in filenames
+        safe_latent_name = str(result.record.latent).replace("/", "--")
+        with open(score_dir / f"{safe_latent_name}.txt", "wb") as f:
+            f.write(orjson.dumps(result.score))
+    return scorer_postprocess
+
+
+# ============================================================================
+# Model and Artifact Loading
+# ============================================================================
+
 def load_artifacts(run_cfg: RunConfig):
     if run_cfg.load_in_8bit:
         dtype = torch.float16
@@ -310,19 +357,8 @@ async def run_scoring(
 
     explainer_pipe = Pipe(process_wrapper(NoOpExplainer(), postprocess=none_postprocessor))
 
-    # scorer preprocess/postprocess
-    def scorer_preprocess(result):
-        if isinstance(result, list):
-            result = result[0]
-        record = result.record
-        record.explanation = result.explanation
-        record.extra_examples = record.not_active
-        return record
-
-    def scorer_postprocess(result, score_dir):
-        safe_latent_name = str(result.record.latent).replace("/", "--")
-        with open(score_dir / f"{safe_latent_name}.txt", "wb") as f:
-            f.write(orjson.dumps(result.score))
+    # Use shared scorer preprocess/postprocess functions
+    scorer_preprocess = create_scorer_preprocess()
 
     scorers = []
     
@@ -355,7 +391,7 @@ async def run_scoring(
         wrapped_scorer = process_wrapper(
             scorer,
             preprocess=scorer_preprocess,
-            postprocess=partial(scorer_postprocess, score_dir=scorer_path),
+            postprocess=partial(create_scorer_postprocess(scorer_path), score_dir=scorer_path),
         )
         scorers.append(wrapped_scorer)
 
@@ -536,25 +572,8 @@ async def process_cache(
             )
         )
 
-    # Builds the record from result returned by the pipeline
-    def scorer_preprocess(result):
-        if isinstance(result, list):
-            result = result[0]
-
-        record = result.record
-        record.explanation = result.explanation
-        if run_cfg.use_contrastive_scorer:
-            record.extra_examples = record.not_active
-        else:
-            record.extra_examples = []  # Ensure scorers get an empty list
-        return record
-
-    # Saves the score to a file
-    def scorer_postprocess(result, score_dir):
-        safe_latent_name = str(result.record.latent).replace("/", "--")
-
-        with open(score_dir / f"{safe_latent_name}.txt", "wb") as f:
-            f.write(orjson.dumps(result.score))
+    # Use shared scorer preprocess/postprocess functions
+    scorer_preprocess = create_scorer_preprocess()
 
     scorers = []
     
@@ -588,7 +607,7 @@ async def process_cache(
         wrapped_scorer = process_wrapper(
             scorer,
             preprocess=scorer_preprocess,
-            postprocess=partial(scorer_postprocess, score_dir=scorer_path),
+            postprocess=partial(create_scorer_postprocess(scorer_path), score_dir=scorer_path),
         )
         scorers.append(wrapped_scorer)
 
@@ -689,11 +708,33 @@ def non_redundant_hookpoints(
 ) -> dict[str, Callable] | list[str]:
     """
     Returns a list of hookpoints that are not already in the cache.
+    For explanations, checks if any explanation files exist with the hookpoint prefix.
+    For other results (like scores), checks if hookpoint directories exist.
     """
     if overwrite:
         print("Overwriting results from", results_path)
         return hookpoint_to_sparse_encode
-    in_results_path = [x.name for x in results_path.glob("*")]
+    
+    # Check if this is the explanations path by looking for .txt files
+    # Explanations are saved as flat files like "hookpoint_latent0.txt"
+    # Other results (like scores) are saved in hookpoint subdirectories
+    sample_files = list(results_path.glob("*.txt"))
+    is_explanations_path = len(sample_files) > 0
+    
+    if is_explanations_path:
+        # For explanations: check if any files exist with the hookpoint prefix
+        in_results_path = set()
+        for file in results_path.glob("*.txt"):
+            # Extract hookpoint from filename like "layers.32_latent0.txt"
+            filename = file.stem  # Remove .txt
+            # Split on "_latent" to get the hookpoint part
+            if "_latent" in filename:
+                hookpoint = filename.split("_latent")[0]
+                in_results_path.add(hookpoint)
+    else:
+        # For scores and other results: check for hookpoint directories
+        in_results_path = {x.name for x in results_path.glob("*") if x.is_dir()}
+    
     if isinstance(hookpoint_to_sparse_encode, dict):
         non_redundant_hookpoints = {
             k: v
@@ -783,7 +824,18 @@ async def run(
         # Use experiment-specific cache directory
         latents_path = base_path / "latents"
 
-    explanations_path = base_path / "explanations"
+    if run_cfg.shared_explanations_path:
+        # Use custom shared explanations directory
+        shared_explanations_base = Path(run_cfg.shared_explanations_path)
+        if not shared_explanations_base.is_absolute():
+            # Make relative paths relative to current working directory
+            shared_explanations_base = Path.cwd() / shared_explanations_base
+        explanations_path = shared_explanations_base
+        print(f"Using shared explanations directory: {explanations_path}")
+    else:
+        # Use experiment-specific explanations directory
+        explanations_path = base_path / "explanations"
+
     scores_path = base_path / "scores"
     neighbours_path = base_path / "neighbours"
     visualize_path = base_path / "visualize"

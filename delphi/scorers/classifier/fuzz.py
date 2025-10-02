@@ -95,7 +95,7 @@ class FuzzingScorer(Classifier, Scorer):
         n_incorrect = self.mean_n_activations_ceil(record.test)
 
         if self.fuzz_type == "default":
-            assert len(record.not_active) > 0, "No non-activating examples found"
+            assert len(record.not_active) > 0, f"No non-activating examples found for latent {record.latent}. This means generate_non_activating was False or constructor failed."
             # check if non_activating examples have any activations > 0
             # if they do they are contrastive examples
             if (record.not_active[0].activations > 0).any():
