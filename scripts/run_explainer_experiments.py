@@ -23,9 +23,10 @@ from experiment_config import (
 # CONTRASTIVE EXPERIMENT CONFIGURATION
 # ============================================================================
 
-DIR_NAME = "500 Latents Qwen32B Scorer"
+DIR_NAME = "500 Latents Same Model"
 THINKING_MODE = False  # Set to True to enable thinking mode
-USE_SEPARATE_SCORER = True
+USE_SEPARATE_SCORER = False
+USE_SHARED_EXPLANATIONS = False  # Set to True to reuse explanations across experiments
 
 # Non-activating source configurations to test
 NON_ACTIVATING_SOURCES = [
@@ -113,7 +114,7 @@ def setup_shared_explanations(explainer_model: str, contrastive_explainer: bool 
 
 def run_experiment(explainer_model: str, non_activating_source: str, 
                   contrastive_config: Tuple[bool, bool, str], train_type: str, 
-                  gpu_id: str = "0") -> float:
+                  gpu_id: str = "0", use_shared_explanations: bool = False) -> float:
     """Run a single experiment with the specified configuration."""
     experiment_dir = get_experiment_dir(explainer_model, non_activating_source, contrastive_config, train_type)
     experiment_name = experiment_dir.name
@@ -127,6 +128,7 @@ def run_experiment(explainer_model: str, non_activating_source: str,
     print(f"Train type: {train_type}")
     print(f"Experiment name: {experiment_name}")
     print(f"Experiment directory: {experiment_dir}")
+    print(f"Use shared explanations: {use_shared_explanations}")
     print(f"Start time: {time.strftime('%Y-%m-%d %H:%M:%S')}")
     
     start_time = time.time()
@@ -138,8 +140,10 @@ def run_experiment(explainer_model: str, non_activating_source: str,
     print(f"Using GPUs: {gpu_ids} (total: {num_gpus})")
     
     # Build the command using shared configuration
-    # Use shared explanations path for this explainer model and contrastive config
-    shared_explanations_path = get_shared_explanations_dir(explainer_model, use_contrastive_explainer)
+    # Use shared explanations path if enabled, otherwise None (will generate fresh)
+    shared_explanations_path = None
+    if use_shared_explanations:
+        shared_explanations_path = get_shared_explanations_dir(explainer_model, use_contrastive_explainer)
     
     cmd = build_base_command(
         experiment_dir=experiment_dir,
@@ -232,11 +236,14 @@ def main():
     # Setup shared cache
     setup_shared_cache()
     
-    # Setup shared explanations for each explainer model and contrastive config
-    print("Setting up shared explanations directories...")
-    for explainer_model in EXPLAINER_MODELS:
-        for use_contrastive_explainer, _, _ in CONTRASTIVE_CONFIGS:
-            setup_shared_explanations(explainer_model, use_contrastive_explainer)
+    # Setup shared explanations for each explainer model and contrastive config (only if enabled)
+    if USE_SHARED_EXPLANATIONS:
+        print("Setting up shared explanations directories...")
+        for explainer_model in EXPLAINER_MODELS:
+            for use_contrastive_explainer, _, _ in CONTRASTIVE_CONFIGS:
+                setup_shared_explanations(explainer_model, use_contrastive_explainer)
+    else:
+        print("Shared explanations disabled - each experiment will generate fresh explanations")
     
     # Track results
     results: List[Tuple[str, str, str, str, float]] = []
@@ -271,7 +278,8 @@ def main():
                         non_activating_source, 
                         contrastive_config, 
                         train_type, 
-                        gpu_id
+                        gpu_id,
+                        USE_SHARED_EXPLANATIONS
                     )
                     
                     results.append((
