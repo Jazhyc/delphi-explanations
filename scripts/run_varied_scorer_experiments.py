@@ -23,7 +23,7 @@ from experiment_config import (
 # VARIED SCORER EXPERIMENT CONFIGURATION
 # ============================================================================
 
-DIR_NAME = "500 Latents Varied Scorers"  # Directory for experiments with varied scorers
+DIR_NAME = "1000 Latents Varied Scorers"  # Directory for experiments with varied scorers
 THINKING_MODE = False  # Set to True to enable thinking mode
 
 # Fixed explainer model for all experiments

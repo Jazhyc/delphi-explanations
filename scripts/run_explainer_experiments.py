@@ -23,47 +23,47 @@ from experiment_config import (
 # CONTRASTIVE EXPERIMENT CONFIGURATION
 # ============================================================================
 
-DIR_NAME = "500 Latents Same Model"
+DIR_NAME = "Contrastive Scoring Test"
 THINKING_MODE = False  # Set to True to enable thinking mode
 USE_SEPARATE_SCORER = False
-USE_SHARED_EXPLANATIONS = False  # Set to True to reuse explanations across experiments
+USE_SHARED_EXPLANATIONS = True  # Set to True to reuse explanations across experiments
 
 # Non-activating source configurations to test
 NON_ACTIVATING_SOURCES = [
     "random", 
-    # "co-occurrence",
-    # "decoder_similarity",
+    "co-occurrence",
+    "decoder_similarity",
     # "faiss",
 ]
 
 # Contrastive experiment configurations
 CONTRASTIVE_CONFIGS = [
     # Format: (use_contrastive_explainer, use_contrastive_scorer, description)
-    (False, False, "baseline"),  # Standard behavior
+    # (False, False, "baseline"),  # Standard behavior
     # (True, False, "contrastive_explainer_only"),  # Use contrastive explainer only
-    # (False, True, "contrastive_scorer_only"),  # Use contrastive scorer only  
+    (False, True, "contrastive_scorer_only"),  # Use contrastive scorer only  
     # (True, True, "both_contrastive"),  # Use both contrastive explainer and scorer
 ]
 
 # Train type configurations to test
 TRAIN_TYPES = [
     "quantiles",
-    # "top", 
+    "top", 
     # "random",
     # "mix",  # Uncomment if needed
 ]
 
 # Explainer models to test - uncomment as needed
 EXPLAINER_MODELS = [
-    "RedHatAI/gemma-3-4b-it-quantized.w4a16",
-    "RedHatAI/Qwen3-4B-quantized.w4a16",
-    "RedHatAI/gemma-3-12b-it-quantized.w4a16",
-    "RedHatAI/gemma-3-27b-it-quantized.w4a16",
+    # "RedHatAI/gemma-3-4b-it-quantized.w4a16",
+    # "RedHatAI/Qwen3-4B-quantized.w4a16",
+    # "RedHatAI/gemma-3-12b-it-quantized.w4a16",
+    # "RedHatAI/gemma-3-27b-it-quantized.w4a16",
     "RedHatAI/Qwen3-14B-quantized.w4a16",
-    "RedHatAI/Qwen3-32B-quantized.w4a16",
-    "RedHatAI/Llama-3.3-70B-Instruct-quantized.w4a16",
-    "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4",
-    "RedHatAI/Llama-4-Scout-17B-16E-Instruct-quantized.w4a16",
+    # "RedHatAI/Qwen3-32B-quantized.w4a16",
+    # "RedHatAI/Llama-3.3-70B-Instruct-quantized.w4a16",
+    # "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4",
+    # "RedHatAI/Llama-4-Scout-17B-16E-Instruct-quantized.w4a16",
 ]
 
 def get_experiment_dir(explainer_model: str, non_activating_source: str, 
