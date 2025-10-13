@@ -259,37 +259,58 @@ def _single_random_iteration(seed, latent_data, latent_weights, use_weights=Fals
         float: F1 score for random predictions (weighted or unweighted)
     """
     np.random.seed(seed)
-    latent_f1s_random = []
-    
-    for latent in latent_data:
-        n_ex = latent['n_examples']
-        labels = latent['labels']
-        
-        # Generate random predictions (50/50 chance for each example)
-        random_preds = np.random.randint(0, 2, size=n_ex)
-        
-        # Compute confusion matrix elements
-        tp = np.sum((random_preds == 1) & (labels == 1))
-        fp = np.sum((random_preds == 1) & (labels == 0))
-        tn = np.sum((random_preds == 0) & (labels == 0))
-        fn = np.sum((random_preds == 0) & (labels == 1))
-        
-        # Compute F1 directly from confusion matrix
-        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
-        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
-        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
-        
-        latent_f1s_random.append(f1)
-    
-    latent_f1s_random = np.asarray(latent_f1s_random, dtype=np.float64)
     
     if use_weights:
-        # Compute frequency-weighted F1
+        # Compute frequency-weighted F1: compute per-latent F1 and weight by firing frequency
+        latent_f1s_random = []
+        
+        for latent in latent_data:
+            n_ex = latent['n_examples']
+            labels = latent['labels']
+            
+            # Generate random predictions (50/50 chance for each example)
+            random_preds = np.random.randint(0, 2, size=n_ex)
+            
+            # Compute confusion matrix elements
+            tp = np.sum((random_preds == 1) & (labels == 1))
+            fp = np.sum((random_preds == 1) & (labels == 0))
+            tn = np.sum((random_preds == 0) & (labels == 0))
+            fn = np.sum((random_preds == 0) & (labels == 1))
+            
+            # Compute F1 directly from confusion matrix
+            precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+            recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+            f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+            
+            latent_f1s_random.append(f1)
+        
+        latent_f1s_random = np.asarray(latent_f1s_random, dtype=np.float64)
         weighted_f1_random = (latent_f1s_random * latent_weights).sum() / latent_weights.sum()
         return float(weighted_f1_random)
     else:
-        # Compute unweighted F1 (simple mean across all latents)
-        return float(np.mean(latent_f1s_random))
+        # Compute unweighted F1: aggregate all examples together and compute F1 globally
+        total_tp = 0
+        total_fp = 0
+        total_fn = 0
+        
+        for latent in latent_data:
+            n_ex = latent['n_examples']
+            labels = latent['labels']
+            
+            # Generate random predictions (50/50 chance for each example)
+            random_preds = np.random.randint(0, 2, size=n_ex)
+            
+            # Accumulate confusion matrix elements
+            total_tp += np.sum((random_preds == 1) & (labels == 1))
+            total_fp += np.sum((random_preds == 1) & (labels == 0))
+            total_fn += np.sum((random_preds == 0) & (labels == 1))
+        
+        # Compute global F1 from accumulated confusion matrix
+        precision = total_tp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else 0.0
+        recall = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+        
+        return float(f1)
 
 
 def compute_random_baseline(score_subset, counts, n_samples=100, n_jobs=8, use_cache=True, use_weights=False):
