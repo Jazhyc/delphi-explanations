@@ -470,15 +470,50 @@ def get_agg_metrics(
 
 
 def add_latent_f1(latent_df: pd.DataFrame) -> pd.DataFrame:
-    def compute_f1(g):
-        return compute_classification_metrics(compute_confusion(g))["f1_score"]
+    """Vectorized F1 computation - much faster than groupby().apply()"""
+    import numpy as np
     
-    f1s = (
-        latent_df.groupby(["module", "latent_idx", "score_type"], group_keys=False)
-        .apply(compute_f1, include_groups=False)  # type: ignore
-        .reset_index(name="f1_score")  # <- naive (un-weighted) F1
+    # Filter valid predictions once
+    valid_df = latent_df[latent_df["prediction"].notna()].copy()
+    
+    if len(valid_df) == 0:
+        latent_df["f1_score"] = 0.0
+        return latent_df
+    
+    # Precompute boolean arrays (vectorized)
+    threshold = 0.5
+    is_activating = valid_df["activating"].astype(bool).values
+    is_positive_pred = (valid_df["prediction"].values >= threshold)  # type: ignore
+    
+    # Add to dataframe for groupby operations
+    valid_df["_tp"] = is_positive_pred & is_activating  # type: ignore
+    valid_df["_fp"] = is_positive_pred & ~is_activating  # type: ignore
+    valid_df["_fn"] = ~is_positive_pred & is_activating  # type: ignore
+    valid_df["_pos"] = is_activating
+    
+    # Group and sum (much faster than apply)
+    grouped = valid_df.groupby(["module", "latent_idx", "score_type"], sort=False)
+    agg_result = grouped[["_tp", "_fp", "_fn", "_pos"]].sum()
+    
+    # Vectorized F1 calculation using numpy
+    tp = agg_result["_tp"].values
+    fp = agg_result["_fp"].values
+    fn = agg_result["_fn"].values  # noqa: F841
+    pos = agg_result["_pos"].values
+    
+    # Avoid division by zero with np.where
+    precision = np.where((tp + fp) > 0, tp / (tp + fp), 0.0)  # type: ignore
+    recall = np.where(pos > 0, tp / pos, 0.0)  # type: ignore
+    f1 = np.where(  # type: ignore
+        (precision + recall) > 0,
+        2 * (precision * recall) / (precision + recall),
+        0.0
     )
-    return latent_df.merge(f1s, on=["module", "latent_idx", "score_type"])
+    
+    agg_result["f1_score"] = f1
+    f1_scores = agg_result[["f1_score"]].reset_index()
+    
+    return latent_df.merge(f1_scores, on=["module", "latent_idx", "score_type"], how="left").fillna({"f1_score": 0.0})
 
 
 def log_results(
