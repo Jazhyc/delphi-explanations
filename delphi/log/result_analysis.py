@@ -314,8 +314,28 @@ def compute_classification_metrics(conf: dict) -> dict:
     )
 
 
-def load_data(scores_path: Path, latents_path: Path, modules: list[str]):
-    """Load all on-disk data into a single DataFrame."""
+def load_data(scores_path: Path, latents_path: Path, modules: list[str], use_cache: bool = True):
+    """Load all on-disk data into a single DataFrame.
+    
+    Args:
+        scores_path: Path to the scores directory
+        latents_path: Path to the latents directory
+        modules: List of module names to load
+        use_cache: Whether to use pickle cache for faster loading (default: True)
+    
+    Returns:
+        Tuple of (DataFrame, counts dict)
+    """
+    # Check for cached data
+    cache_file = scores_path.parent / "cached_dataframe.pkl"
+    if use_cache and cache_file.exists():
+        try:
+            import pickle
+            with open(cache_file, 'rb') as f:
+                cached_data = pickle.load(f)
+            return cached_data['latent_df'], cached_data['counts']
+        except Exception as e:
+            print(f"Warning: Failed to load cache, loading from source: {e}")
 
     def parse_score_file(path: Path) -> pd.DataFrame:
         """
@@ -374,7 +394,18 @@ def load_data(scores_path: Path, latents_path: Path, modules: list[str]):
 
                 latent_dfs.append(latent_df)
 
-    return pd.concat(latent_dfs, ignore_index=True), counts
+    result_df = pd.concat(latent_dfs, ignore_index=True)
+    
+    # Save to cache for future use
+    if use_cache:
+        try:
+            import pickle
+            with open(cache_file, 'wb') as f:
+                pickle.dump({'latent_df': result_df, 'counts': counts}, f)
+        except Exception as e:
+            print(f"Warning: Failed to save cache: {e}")
+    
+    return result_df, counts
 
 
 def frequency_weighted_f1(
