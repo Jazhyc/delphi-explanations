@@ -183,3 +183,6 @@ results/
 statistics/
 .embedding_cache/
 wandb/
+
+# Project specific
+scripts/cache/*
