@@ -245,7 +245,7 @@ def compute_weighted_ci_errors(score_subset, counts, freq_weighted_f1, confidenc
     return lower_error, upper_error
 
 
-def _single_random_iteration(seed, latent_data, latent_weights):
+def _single_random_iteration(seed, latent_data, latent_weights, use_weights=False):
     """
     Compute one random baseline sample where predictions are randomized.
     
@@ -253,9 +253,10 @@ def _single_random_iteration(seed, latent_data, latent_weights):
         seed: Random seed for reproducibility
         latent_data: List of dicts with 'predictions', 'labels', 'n_examples'
         latent_weights: Array of firing frequency weights
+        use_weights: If True, compute frequency-weighted F1; if False, compute unweighted F1
         
     Returns:
-        float: Frequency-weighted F1 for random predictions
+        float: F1 score for random predictions (weighted or unweighted)
     """
     np.random.seed(seed)
     latent_f1s_random = []
@@ -280,18 +281,23 @@ def _single_random_iteration(seed, latent_data, latent_weights):
         
         latent_f1s_random.append(f1)
     
-    # Compute frequency-weighted F1 for this random sample
     latent_f1s_random = np.asarray(latent_f1s_random, dtype=np.float64)
-    weighted_f1_random = (latent_f1s_random * latent_weights).sum() / latent_weights.sum()
-    return float(weighted_f1_random)
+    
+    if use_weights:
+        # Compute frequency-weighted F1
+        weighted_f1_random = (latent_f1s_random * latent_weights).sum() / latent_weights.sum()
+        return float(weighted_f1_random)
+    else:
+        # Compute unweighted F1 (simple mean across all latents)
+        return float(np.mean(latent_f1s_random))
 
 
-def compute_random_baseline(score_subset, counts, n_samples=100, n_jobs=8, use_cache=True):
+def compute_random_baseline(score_subset, counts, n_samples=100, n_jobs=8, use_cache=True, use_weights=False):
     """
     Compute random baseline by generating random predictions for each example.
     
     The baseline represents the expected performance if predictions were made
-    randomly (50/50 chance for each example), weighted by firing frequency.
+    randomly (50/50 chance for each example). Can optionally weight by firing frequency.
     
     Args:
         score_subset: DataFrame with score data for a specific score type
@@ -299,6 +305,7 @@ def compute_random_baseline(score_subset, counts, n_samples=100, n_jobs=8, use_c
         n_samples: Number of random samples to average over
         n_jobs: Number of parallel processes to use
         use_cache: Whether to use cached results if available
+        use_weights: If True, compute frequency-weighted F1; if False, compute unweighted F1
         
     Returns:
         float: Mean random baseline F1 score
@@ -307,7 +314,9 @@ def compute_random_baseline(score_subset, counts, n_samples=100, n_jobs=8, use_c
     readable_key = None
     cache_hash = None
     if use_cache:
-        readable_key, cache_hash = _compute_cache_key(score_subset, counts, n_samples, 0.0, "random_baseline")
+        # Include use_weights in cache key to distinguish weighted vs unweighted baselines
+        operation_name = "random_baseline_weighted" if use_weights else "random_baseline_unweighted"
+        readable_key, cache_hash = _compute_cache_key(score_subset, counts, n_samples, 0.0, operation_name)
         cached_result = _load_from_cache(readable_key, cache_hash)
         if cached_result is not None:
             print(f"  [Using cached random baseline: {readable_key}]")
@@ -349,7 +358,7 @@ def compute_random_baseline(score_subset, counts, n_samples=100, n_jobs=8, use_c
     random_samples = []
     with ProcessPoolExecutor(max_workers=n_jobs) as executor:
         future_to_seed = {
-            executor.submit(_single_random_iteration, seed, latent_data, latent_weights): seed 
+            executor.submit(_single_random_iteration, seed, latent_data, latent_weights, use_weights): seed 
             for seed in seeds
         }
         
