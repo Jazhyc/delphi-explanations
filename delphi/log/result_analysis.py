@@ -470,11 +470,12 @@ def get_agg_metrics(
 
 
 def add_latent_f1(latent_df: pd.DataFrame) -> pd.DataFrame:
+    def compute_f1(g):
+        return compute_classification_metrics(compute_confusion(g))["f1_score"]
+    
     f1s = (
-        latent_df.groupby(["module", "latent_idx", "score_type"])
-        .apply(
-            lambda g: compute_classification_metrics(compute_confusion(g))["f1_score"]
-        )
+        latent_df.groupby(["module", "latent_idx", "score_type"], group_keys=False)
+        .apply(compute_f1, include_groups=False)  # type: ignore
         .reset_index(name="f1_score")  # <- naive (un-weighted) F1
     )
     return latent_df.merge(f1s, on=["module", "latent_idx", "score_type"])
