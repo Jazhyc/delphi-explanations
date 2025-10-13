@@ -73,15 +73,18 @@ def _compute_cache_key(score_subset, counts, n_boot, confidence, operation="boot
         operation: Type of operation ("bootstrap" or "random_baseline")
         
     Returns:
-        String cache key (hash)
+        Tuple of (readable_key, hash_key)
     """
     # Create a deterministic representation of the data
+    score_type = str(score_subset['score_type'].iloc[0]) if len(score_subset) > 0 else 'unknown'
+    n_latents = len(score_subset.groupby(["module", "latent_idx"]))
+    
     cache_data = {
         'operation': operation,
         'n_boot': n_boot,
         'confidence': confidence,
         'n_examples': len(score_subset),
-        'score_type': str(score_subset['score_type'].iloc[0]) if len(score_subset) > 0 else 'unknown',
+        'score_type': score_type,
     }
     
     # Add latent-level summary
@@ -97,15 +100,19 @@ def _compute_cache_key(score_subset, counts, n_boot, confidence, operation="boot
     
     cache_data['latent_summary'] = sorted(latent_summary)
     
-    # Create hash
+    # Create hash for uniqueness
     cache_str = json.dumps(cache_data, sort_keys=True)
     cache_hash = hashlib.sha256(cache_str.encode()).hexdigest()[:16]
-    return cache_hash
+    
+    # Create readable key
+    readable_key = f"{operation}_{score_type}_{n_latents}latents_{n_boot}samples_conf{int(confidence*100)}"
+    
+    return readable_key, cache_hash
 
 
-def _load_from_cache(cache_key):
+def _load_from_cache(readable_key, cache_hash):
     """Load cached results if available."""
-    cache_file = CACHE_DIR / f"{cache_key}.json"
+    cache_file = CACHE_DIR / f"{readable_key}_{cache_hash[:8]}.json"
     if cache_file.exists():
         try:
             with open(cache_file, 'r') as f:
@@ -116,12 +123,12 @@ def _load_from_cache(cache_key):
     return None
 
 
-def _save_to_cache(cache_key, data):
-    """Save results to cache."""
-    cache_file = CACHE_DIR / f"{cache_key}.json"
+def _save_to_cache(readable_key, cache_hash, data):
+    """Save results to cache with readable filename."""
+    cache_file = CACHE_DIR / f"{readable_key}_{cache_hash[:8]}.json"
     try:
         with open(cache_file, 'w') as f:
-            json.dump(data, f)
+            json.dump(data, f, indent=2)
     except Exception as e:
         print(f"Warning: Failed to save cache: {e}")
 
@@ -149,12 +156,14 @@ def compute_weighted_ci_errors(score_subset, counts, freq_weighted_f1, confidenc
     Returns:
         Tuple of (lower_error, upper_error) for confidence interval
     """
-    # Check cache first
+    # Check cache first and compute cache keys
+    readable_key = None
+    cache_hash = None
     if use_cache:
-        cache_key = _compute_cache_key(score_subset, counts, n_boot, confidence, "bootstrap")
-        cached_result = _load_from_cache(cache_key)
+        readable_key, cache_hash = _compute_cache_key(score_subset, counts, n_boot, confidence, "bootstrap")
+        cached_result = _load_from_cache(readable_key, cache_hash)
         if cached_result is not None:
-            print(f"  [Using cached bootstrap results]")
+            print(f"  [Using cached bootstrap results: {readable_key}]")
             return cached_result['lower_error'], cached_result['upper_error']
     
     # Pre-compute per-latent confusion matrices and metadata
@@ -231,7 +240,7 @@ def compute_weighted_ci_errors(score_subset, counts, freq_weighted_f1, confidenc
             'n_boot': n_boot,
             'confidence': confidence
         }
-        _save_to_cache(cache_key, cache_result)
+        _save_to_cache(readable_key, cache_hash, cache_result)
     
     return lower_error, upper_error
 
@@ -294,12 +303,14 @@ def compute_random_baseline(score_subset, counts, n_samples=100, n_jobs=8, use_c
     Returns:
         float: Mean random baseline F1 score
     """
-    # Check cache first
+    # Check cache first and compute cache keys
+    readable_key = None
+    cache_hash = None
     if use_cache:
-        cache_key = _compute_cache_key(score_subset, counts, n_samples, 0.0, "random_baseline")
-        cached_result = _load_from_cache(cache_key)
+        readable_key, cache_hash = _compute_cache_key(score_subset, counts, n_samples, 0.0, "random_baseline")
+        cached_result = _load_from_cache(readable_key, cache_hash)
         if cached_result is not None:
-            print(f"  [Using cached random baseline]")
+            print(f"  [Using cached random baseline: {readable_key}]")
             return cached_result['baseline_f1']
     
     # Pre-compute per-latent data
@@ -362,6 +373,6 @@ def compute_random_baseline(score_subset, counts, n_samples=100, n_jobs=8, use_c
             'n_samples': n_samples,
             'std': float(np.std(random_samples))
         }
-        _save_to_cache(cache_key, cache_result)
+        _save_to_cache(readable_key, cache_hash, cache_result)
     
     return baseline_f1
