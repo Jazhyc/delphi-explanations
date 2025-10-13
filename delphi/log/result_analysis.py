@@ -472,6 +472,7 @@ def get_agg_metrics(
 def add_latent_f1(latent_df: pd.DataFrame) -> pd.DataFrame:
     """Vectorized F1 computation - much faster than groupby().apply()"""
     import numpy as np
+    import warnings
     
     # Filter valid predictions once
     valid_df = latent_df[latent_df["prediction"].notna()].copy()
@@ -501,14 +502,18 @@ def add_latent_f1(latent_df: pd.DataFrame) -> pd.DataFrame:
     fn = agg_result["_fn"].values  # noqa: F841
     pos = agg_result["_pos"].values
     
-    # Avoid division by zero with np.where
-    precision = np.where((tp + fp) > 0, tp / (tp + fp), 0.0)  # type: ignore
-    recall = np.where(pos > 0, tp / pos, 0.0)  # type: ignore
-    f1 = np.where(  # type: ignore
-        (precision + recall) > 0,
-        2 * (precision * recall) / (precision + recall),
-        0.0
-    )
+    # Suppress expected divide-by-zero warnings (handled by np.where)
+    with warnings.catch_warnings():
+        warnings.filterwarnings('ignore', category=RuntimeWarning, message='invalid value encountered in divide')
+        
+        # Avoid division by zero with np.where
+        precision = np.where((tp + fp) > 0, tp / (tp + fp), 0.0)  # type: ignore
+        recall = np.where(pos > 0, tp / pos, 0.0)  # type: ignore
+        f1 = np.where(  # type: ignore
+            (precision + recall) > 0,
+            2 * (precision * recall) / (precision + recall),
+            0.0
+        )
     
     agg_result["f1_score"] = f1
     f1_scores = agg_result[["f1_score"]].reset_index()
