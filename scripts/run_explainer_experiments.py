@@ -26,12 +26,12 @@ from experiment_config import (
 DIR_NAME = "Contrastive Scoring Test"
 THINKING_MODE = False  # Set to True to enable thinking mode
 USE_SEPARATE_SCORER = False
-USE_SHARED_EXPLANATIONS = True  # Set to True to reuse explanations across experiments
+USE_SHARED_EXPLANATIONS = False  # Set to True to reuse explanations across experiments
 
 # Non-activating source configurations to test
 NON_ACTIVATING_SOURCES = [
-    "random", 
-    "co-occurrence",
+    # "random", 
+    # "co-occurrence",
     "decoder_similarity",
     # "faiss",
 ]
@@ -60,7 +60,7 @@ EXPLAINER_MODELS = [
     # "RedHatAI/gemma-3-12b-it-quantized.w4a16",
     # "RedHatAI/gemma-3-27b-it-quantized.w4a16",
     "RedHatAI/Qwen3-14B-quantized.w4a16",
-    # "RedHatAI/Qwen3-32B-quantized.w4a16",
+    "RedHatAI/Qwen3-32B-quantized.w4a16",
     # "RedHatAI/Llama-3.3-70B-Instruct-quantized.w4a16",
     # "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4",
     # "RedHatAI/Llama-4-Scout-17B-16E-Instruct-quantized.w4a16",
@@ -333,3 +333,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    print("Remember to back up the data")

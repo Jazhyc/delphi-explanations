@@ -30,6 +30,10 @@ dependencies = [
     "asyncer>=0.0.8",
     "beartype",
     "flashinfer-python>=0.2.11.post1",
+    "jupyter>=1.1.1",
+    "matplotlib>=3.10.7",
+    "ipympl>=0.9.8",
+    "adjusttext>=1.3.0",
 ]
 
 [project.optional-dependencies]
