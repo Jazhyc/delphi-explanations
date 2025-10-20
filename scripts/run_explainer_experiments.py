@@ -265,8 +265,14 @@ def main():
                 use_contrastive_explainer, use_contrastive_scorer, contrastive_desc = contrastive_config
                 
                 # Skip certain combinations that don't make sense
+                # 1. Random source with contrastive doesn't make sense (non-activating should be meaningful)
                 if non_activating_source == "random" and (use_contrastive_explainer or use_contrastive_scorer):
                     print(f"Skipping {non_activating_source} + {contrastive_desc} (random source with contrastive doesn't make sense)")
+                    continue
+                
+                # 2. Non-random sources with baseline doesn't make sense (baseline doesn't use non-activating examples)
+                if non_activating_source != "random" and contrastive_desc == "baseline":
+                    print(f"Skipping {non_activating_source} + {contrastive_desc} (non-random source with baseline doesn't make sense)")
                     continue
                 
                 for train_type in TRAIN_TYPES:
@@ -321,7 +327,12 @@ def main():
                 use_contrastive_explainer, use_contrastive_scorer, contrastive_desc = contrastive_config
                 
                 # Skip combinations that don't make sense
+                # 1. Random source with contrastive doesn't make sense
                 if non_activating_source == "random" and (use_contrastive_explainer or use_contrastive_scorer):
+                    continue
+                
+                # 2. Non-random sources with baseline doesn't make sense
+                if non_activating_source != "random" and contrastive_desc == "baseline":
                     continue
                     
                 for train_type in TRAIN_TYPES:
