@@ -248,17 +248,8 @@ def main():
     # Track results
     results: List[Tuple[str, str, str, str, float]] = []
     
-    # Calculate total number of experiments
-    total_experiments = (len(EXPLAINER_MODELS) * len(NON_ACTIVATING_SOURCES) * 
-                        len(CONTRASTIVE_CONFIGS) * len(TRAIN_TYPES))
-    
-    print(f"Total experiments to run: {total_experiments}")
-    print(f"Starting experiments at {time.strftime('%Y-%m-%d %H:%M:%S')}")
-    print()
-    
-    experiment_count = 0
-    
-    # Run experiments for each configuration combination
+    # Build list of valid experiment configurations (filter out illegal combinations)
+    valid_experiments = []
     for explainer_model in EXPLAINER_MODELS:
         for non_activating_source in NON_ACTIVATING_SOURCES:
             for contrastive_config in CONTRASTIVE_CONFIGS:
@@ -267,34 +258,43 @@ def main():
                 # Skip certain combinations that don't make sense
                 # 1. Random source with contrastive doesn't make sense (non-activating should be meaningful)
                 if non_activating_source == "random" and (use_contrastive_explainer or use_contrastive_scorer):
-                    print(f"Skipping {non_activating_source} + {contrastive_desc} (random source with contrastive doesn't make sense)")
+                    print(f"Filtering out: {non_activating_source} + {contrastive_desc} (random source with contrastive doesn't make sense)")
                     continue
                 
                 # 2. Non-random sources with baseline doesn't make sense (baseline doesn't use non-activating examples)
                 if non_activating_source != "random" and contrastive_desc == "baseline":
-                    print(f"Skipping {non_activating_source} + {contrastive_desc} (non-random source with baseline doesn't make sense)")
+                    print(f"Filtering out: {non_activating_source} + {contrastive_desc} (non-random source with baseline doesn't make sense)")
                     continue
                 
                 for train_type in TRAIN_TYPES:
-                    experiment_count += 1
-                    print(f"Progress: {experiment_count}/{total_experiments}")
-                    
-                    duration = run_experiment(
-                        explainer_model, 
-                        non_activating_source, 
-                        contrastive_config, 
-                        train_type, 
-                        gpu_id,
-                        USE_SHARED_EXPLANATIONS
-                    )
-                    
-                    results.append((
-                        explainer_model, 
-                        non_activating_source, 
-                        contrastive_desc, 
-                        train_type, 
-                        duration
-                    ))
+                    valid_experiments.append((explainer_model, non_activating_source, contrastive_config, train_type))
+    
+    total_experiments = len(valid_experiments)
+    print(f"\nTotal valid experiments to run: {total_experiments}")
+    print(f"Starting experiments at {time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print()
+    
+    # Run experiments for each valid configuration
+    for experiment_count, (explainer_model, non_activating_source, contrastive_config, train_type) in enumerate(valid_experiments, start=1):
+        use_contrastive_explainer, use_contrastive_scorer, contrastive_desc = contrastive_config
+        print(f"Progress: {experiment_count}/{total_experiments}")
+        
+        duration = run_experiment(
+            explainer_model, 
+            non_activating_source, 
+            contrastive_config, 
+            train_type, 
+            gpu_id,
+            USE_SHARED_EXPLANATIONS
+        )
+        
+        results.append((
+            explainer_model, 
+            non_activating_source, 
+            contrastive_desc, 
+            train_type, 
+            duration
+        ))
     
     # Print summary
     print("=== EXPERIMENT SUMMARY ===")
@@ -321,23 +321,9 @@ def main():
     
     print()
     print("Results saved in:")
-    for explainer_model in EXPLAINER_MODELS:
-        for non_activating_source in NON_ACTIVATING_SOURCES:
-            for contrastive_config in CONTRASTIVE_CONFIGS:
-                use_contrastive_explainer, use_contrastive_scorer, contrastive_desc = contrastive_config
-                
-                # Skip combinations that don't make sense
-                # 1. Random source with contrastive doesn't make sense
-                if non_activating_source == "random" and (use_contrastive_explainer or use_contrastive_scorer):
-                    continue
-                
-                # 2. Non-random sources with baseline doesn't make sense
-                if non_activating_source != "random" and contrastive_desc == "baseline":
-                    continue
-                    
-                for train_type in TRAIN_TYPES:
-                    experiment_dir = get_experiment_dir(explainer_model, non_activating_source, contrastive_config, train_type)
-                    print(f"  - {experiment_dir}")
+    for explainer_model, non_activating_source, contrastive_config, train_type in valid_experiments:
+        experiment_dir = get_experiment_dir(explainer_model, non_activating_source, contrastive_config, train_type)
+        print(f"  - {experiment_dir}")
     
     print()
     print(f"Shared cache location: {get_cache_dir()}")
