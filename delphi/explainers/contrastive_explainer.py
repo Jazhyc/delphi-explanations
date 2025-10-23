@@ -38,12 +38,8 @@ class ContrastiveExplainer(Explainer):
             non_activating_examples = record.not_active[: self.max_non_activating]
 
             # Ensure non-activating examples have normalized activations for consistency
-            for example in non_activating_examples:
-                if example.normalized_activations is None:
-                    # Use zeros for non-activating examples
-                    example.normalized_activations = torch.zeros_like(
-                        example.activations
-                    )
+            # Note: NonActivatingExample doesn't have normalized_activations field,
+            # only ActivatingExample does. Skip normalization for non-activating examples.
 
         # Combine examples for the prompt
         combined_examples = activating_examples + non_activating_examples
