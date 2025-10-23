@@ -23,7 +23,7 @@ from experiment_config import (
 # CONTRASTIVE EXPERIMENT CONFIGURATION
 # ============================================================================
 
-DIR_NAME = "Contrastive Scoring Test"
+DIR_NAME = "Contrastive Scoring Quick"
 THINKING_MODE = False  # Set to True to enable thinking mode
 USE_SEPARATE_SCORER = False
 USE_SHARED_EXPLANATIONS = False  # Set to True to reuse explanations across experiments
@@ -59,7 +59,7 @@ EXPLAINER_MODELS = [
     # "RedHatAI/Qwen3-4B-quantized.w4a16",
     # "RedHatAI/gemma-3-12b-it-quantized.w4a16",
     # "RedHatAI/gemma-3-27b-it-quantized.w4a16",
-    "RedHatAI/Qwen3-14B-quantized.w4a16",
+    # "RedHatAI/Qwen3-14B-quantized.w4a16",
     "RedHatAI/Qwen3-32B-quantized.w4a16",
     # "RedHatAI/Llama-3.3-70B-Instruct-quantized.w4a16",
     # "hugging-quants/Meta-Llama-3.1-8B-Instruct-GPTQ-INT4",

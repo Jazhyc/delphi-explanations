@@ -42,7 +42,7 @@ class Offline(Client):
     def __init__(
         self,
         model: str,
-        max_memory: float = 0.85,
+        max_memory: float = 0.8,
         prefix_caching: bool = True,
         batch_size: int = 100,
         max_model_len: int = 4096,

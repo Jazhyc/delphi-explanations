@@ -28,7 +28,7 @@ DATASET_COLUMN = "raw_content"
 # EXPERIMENT HYPERPARAMETERS
 # ============================================================================
 
-MAX_LATENTS = 500
+MAX_LATENTS = 100
 N_TOKENS = "10000000"
 CACHE_CTX_LEN = "256"
 EXAMPLE_CTX_LEN = "32"
