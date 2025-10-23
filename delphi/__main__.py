@@ -817,11 +817,15 @@ async def run(
             shared_cache_base = Path.cwd() / shared_cache_base
         # The latents_path points to the latents subdirectory within the shared cache
         latents_path = shared_cache_base / "latents"
+        # Neighbours should also be in the shared cache directory
+        neighbours_path = shared_cache_base / "neighbours"
         print(f"Using shared activation cache: {shared_cache_base}")
         print(f"Latents directory: {latents_path}")
+        print(f"Neighbours directory: {neighbours_path}")
     else:
         # Use experiment-specific cache directory
         latents_path = base_path / "latents"
+        neighbours_path = base_path / "neighbours"
 
     if run_cfg.shared_explanations_path:
         # Use custom shared explanations directory
@@ -836,7 +840,6 @@ async def run(
         explanations_path = base_path / "explanations"
 
     scores_path = base_path / "scores"
-    neighbours_path = base_path / "neighbours"
     visualize_path = base_path / "visualize"
 
     latent_range = torch.arange(run_cfg.max_latents) if run_cfg.max_latents else None
